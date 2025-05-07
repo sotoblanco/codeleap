@@ -4,9 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Lightbulb, BookOpen, MessageSquare } from 'lucide-react';
+import { Lightbulb, BookOpen, MessageSquare, Zap } from 'lucide-react';
 import type { Exercise, Explanation, Feedback } from '@/app/codeleap/page-client';
 import { LoadingSpinner } from './loading-spinner';
+
+type LearningMode = 'hand-holding' | 'challenge';
 
 interface ExercisePanelProps {
   exercise: Exercise | null;
@@ -16,6 +18,7 @@ interface ExercisePanelProps {
   isLoadingExplanation: boolean;
   isLoadingFeedback: boolean;
   onExplainConcept: () => Promise<void>;
+  learningMode: LearningMode;
 }
 
 export function ExercisePanel({
@@ -26,12 +29,20 @@ export function ExercisePanel({
   isLoadingExplanation,
   isLoadingFeedback,
   onExplainConcept,
+  learningMode,
 }: ExercisePanelProps) {
   return (
     <Card className="h-full flex flex-col shadow-xl rounded-lg">
       <CardHeader className="pb-2">
-        <CardTitle className="text-2xl font-bold text-primary">Coding Challenge</CardTitle>
-        <CardDescription>Read the instructions and complete the code.</CardDescription>
+        <CardTitle className="text-2xl font-bold text-primary">
+          {learningMode === 'challenge' ? <Zap className="inline h-6 w-6 mr-2 text-orange-500" /> : <Lightbulb className="inline h-6 w-6 mr-2 text-blue-500" />}
+          Coding {learningMode === 'challenge' ? 'Challenge' : 'Exercise'}
+        </CardTitle>
+        <CardDescription>
+          {learningMode === 'challenge' 
+            ? 'Solve the problem from scratch. Good luck!' 
+            : 'Read the instructions and complete the code.'}
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex-grow p-0">
         <Tabs defaultValue="question" className="h-full flex flex-col">
@@ -56,22 +67,31 @@ export function ExercisePanel({
               ) : exercise ? (
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-foreground">{exercise.question}</h3>
-                  <p className="text-muted-foreground">
-                    Fill in the blanks or complete the code snippet provided in the editor.
-                  </p>
-                  {/* Example of using documentation, can be expanded */}
+                  
+                  {learningMode === 'hand-holding' && exercise.codeSnippet && (
+                    <p className="text-muted-foreground">
+                      Fill in the blanks or complete the code snippet provided in the editor.
+                    </p>
+                  )}
+                  {learningMode === 'challenge' && (
+                    <p className="text-muted-foreground">
+                      Write the Python code to solve this problem. You'll need to start from scratch in the editor.
+                    </p>
+                  )}
+                  
                   {exercise.topic && (
                      <Alert>
                        <Lightbulb className="h-4 w-4" />
                        <AlertTitle>Topic: {exercise.topic}</AlertTitle>
                        <AlertDescription>
-                         Focus on concepts related to {exercise.topic.toLowerCase()} to solve this exercise.
+                         Focus on concepts related to {exercise.topic.toLowerCase()} to solve this.
+                         {exercise.documentation && <div className="mt-2 text-xs"><strong className="font-semibold">Hint:</strong> {exercise.documentation.substring(0,150)}{exercise.documentation.length > 150 ? "..." : ""}</div>}
                        </AlertDescription>
                      </Alert>
                   )}
                 </div>
               ) : (
-                <p className="text-muted-foreground">No exercise loaded. Click "New Exercise" to start.</p>
+                <p className="text-muted-foreground">No exercise loaded. Generate a learning plan or click "New Exercise" (if available) to start.</p>
               )}
             </TabsContent>
 
@@ -81,7 +101,7 @@ export function ExercisePanel({
                   <LoadingSpinner size={32} />
                 </div>
               ) : explanation ? (
-                <div className="space-y-4 prose prose-sm max-w-none">
+                <div className="space-y-4 prose prose-sm max-w-none dark:prose-invert">
                   <h4 className="font-semibold">Simplified Explanation:</h4>
                   <p>{explanation.explanation}</p>
                   <h4 className="font-semibold">Breakdown:</h4>
@@ -110,16 +130,16 @@ export function ExercisePanel({
                   <LoadingSpinner size={32} />
                 </div>
               ) : feedback ? (
-                <Alert variant={feedback.isCorrect ? "default" : "destructive"} className={feedback.isCorrect ? "bg-green-50 border-green-300" : ""}>
-                   <AlertTitle className={feedback.isCorrect ? "text-green-700" : ""}>
-                    {feedback.isCorrect ? "Correct!" : "Needs Improvement"}
+                <Alert variant={feedback.isCorrect === false ? "destructive" : "default"} className={feedback.isCorrect === true ? "bg-green-50 border-green-300 dark:bg-green-900/30 dark:border-green-700" : ""}>
+                   <AlertTitle className={feedback.isCorrect === true ? "text-green-700 dark:text-green-300" : feedback.isCorrect === false ? "text-destructive-foreground" : ""}>
+                    {feedback.isCorrect === true ? "Correct!" : feedback.isCorrect === false ? "Needs Improvement" : "Feedback"}
                   </AlertTitle>
-                  <AlertDescription className="prose prose-sm max-w-none">
+                  <AlertDescription className="prose prose-sm max-w-none dark:prose-invert">
                     {feedback.message && <p>{feedback.message}</p>}
                     {feedback.suggestions && (
                       <>
                         <h5 className="font-semibold mt-2">Suggestions:</h5>
-                        <p>{feedback.suggestions}</p>
+                        <div dangerouslySetInnerHTML={{ __html: feedback.suggestions.replace(/\n/g, '<br />') }} />
                       </>
                     )}
                   </AlertDescription>

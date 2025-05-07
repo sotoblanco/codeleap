@@ -4,7 +4,7 @@ import type { editor } from 'monaco-editor'; // Using type import
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Play, RefreshCw, CheckCircle, Wand2 } from 'lucide-react';
+import { Play, Wand2, CheckCircle, Eye, Code } from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from './loading-spinner';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -16,18 +16,24 @@ interface CodePanelProps {
   onSubmitCode: (code: string) => Promise<void>;
   isLoadingImprove: boolean;
   isLoadingSubmit: boolean;
+  showCodeEditor: boolean; // New prop
 }
 
 // Basic placeholder for syntax highlighting. In a real app, use Monaco or CodeMirror.
 const SyntaxHighlightedCode = ({ code }: { code: string }) => {
-  // Basic Python keyword highlighting
   const highlightKeywords = (line: string) => {
-    const keywords = ['def', 'class', 'return', 'if', 'else', 'elif', 'for', 'while', 'import', 'from', 'print', 'True', 'False', 'None'];
+    const keywords = ['def', 'class', 'return', 'if', 'else', 'elif', 'for', 'while', 'import', 'from', 'print', 'True', 'False', 'None', 'async', 'await', 'try', 'except', 'finally', 'with', 'as', 'lambda', 'yield', 'pass', 'continue', 'break', 'global', 'nonlocal', 'assert', 'del', 'in', 'is', 'not', 'or', 'and'];
+    const builtInFunctions = ['abs', 'all', 'any', 'ascii', 'bin', 'bool', 'breakpoint', 'bytearray', 'bytes', 'callable', 'chr', 'classmethod', 'compile', 'complex', 'delattr', 'dict', 'dir', 'divmod', 'enumerate', 'eval', 'exec', 'filter', 'float', 'format', 'frozenset', 'getattr', 'globals', 'hasattr', 'hash', 'help', 'hex', 'id', 'input', 'int', 'isinstance', 'issubclass', 'iter', 'len', 'list', 'locals', 'map', 'max', 'memoryview', 'min', 'next', 'object', 'oct', 'open', 'ord', 'pow', 'property', 'range', 'repr', 'reversed', 'round', 'set', 'setattr', 'slice', 'sorted', 'staticmethod', 'str', 'sum', 'super', 'tuple', 'type', 'vars', 'zip', '__import__'];
+    
     const keywordRegex = new RegExp(`\\b(${keywords.join('|')})\\b`, 'g');
-    return line.replace(keywordRegex, '<span class="text-sky-400">$1</span>')
-               .replace(/(\".*?\")/g, '<span class="text-green-400">$1</span>') // Strings
-               .replace(/(\'.*?\')/g, '<span class="text-green-400">$1</span>') // Strings
-               .replace(/(#.*)/g, '<span class="text-slate-500">$1</span>'); // Comments
+    const builtInRegex = new RegExp(`\\b(${builtInFunctions.join('|')})(?=\\()`, 'g'); // Lookahead for (
+    
+    return line
+      .replace(keywordRegex, '<span class="text-sky-400 font-semibold">$1</span>') // Keywords
+      .replace(builtInRegex, '<span class="text-purple-400">$1</span>') // Built-in functions
+      .replace(/(\"[^\"\\]*(?:\\.[^\"\\]*)*\"|\'[^\'\\]*(?:\\.[^\'\\]*)*\')/g, '<span class="text-green-400">$1</span>') // Strings (improved)
+      .replace(/(#.*)/g, '<span class="text-slate-500 italic">$1</span>') // Comments
+      .replace(/\b(\d+\.?\d*)\b/g, '<span class="text-yellow-400">$1</span>'); // Numbers
   };
 
   return (
@@ -47,6 +53,7 @@ export function CodePanel({
   onSubmitCode,
   isLoadingImprove,
   isLoadingSubmit,
+  showCodeEditor,
 }: CodePanelProps) {
   const [code, setCode] = useState(initialCode);
   const [showSyntaxHighlighted, setShowSyntaxHighlighted] = useState(false);
@@ -55,7 +62,10 @@ export function CodePanel({
 
   useEffect(() => {
     setCode(initialCode);
-  }, [initialCode]);
+    // If editor is not shown (e.g. challenge mode initially), default to preview if there's code.
+    // If editor IS shown, default to edit mode.
+    setShowSyntaxHighlighted(showCodeEditor ? false : !!initialCode);
+  }, [initialCode, showCodeEditor]);
 
   const handleImproveCode = async () => {
     await onImproveCode(code);
@@ -65,27 +75,31 @@ export function CodePanel({
     await onSubmitCode(code);
   };
 
+  // Determine if the editor should be visible based on showCodeEditor and preview state
+  const editorVisible = showCodeEditor && !showSyntaxHighlighted;
+  // Determine if the preview should be visible
+  const previewVisible = showSyntaxHighlighted || !showCodeEditor;
+
+
   return (
     <Card className="h-full flex flex-col bg-primary text-primary-foreground shadow-2xl rounded-lg">
-      <CardHeader>
+      <CardHeader className="flex flex-row justify-between items-center">
         <CardTitle className="text-xl font-semibold text-primary-foreground">Python Editor</CardTitle>
-      </CardHeader>
-      <CardContent className="flex-grow flex flex-col p-0 relative">
-        <div className="absolute top-2 right-2 z-10">
+         {showCodeEditor && ( // Only show toggle if editor itself is meant to be available
             <Button 
               variant="ghost" 
               size="sm" 
               onClick={() => setShowSyntaxHighlighted(!showSyntaxHighlighted)}
               className="text-primary-foreground hover:bg-primary-foreground/10"
+              aria-label={showSyntaxHighlighted ? "Switch to Edit Mode" : "Switch to Preview Mode"}
             >
+              {showSyntaxHighlighted ? <Code className="mr-1 h-4 w-4" /> : <Eye className="mr-1 h-4 w-4" />}
               {showSyntaxHighlighted ? "Edit" : "Preview"}
             </Button>
-        </div>
-        {showSyntaxHighlighted ? (
-          <ScrollArea className="h-full flex-grow p-4">
-             <SyntaxHighlightedCode code={code} />
-          </ScrollArea>
-        ) : (
+          )}
+      </CardHeader>
+      <CardContent className="flex-grow flex flex-col p-0 relative">
+        {editorVisible ? (
           <Textarea
             ref={editorRef}
             value={code}
@@ -93,7 +107,20 @@ export function CodePanel({
             placeholder="Write your Python code here..."
             className="flex-grow w-full h-full p-4 bg-gray-800 text-gray-100 border-0 rounded-none resize-none focus:ring-0 focus:border-accent font-mono text-sm leading-relaxed"
             spellCheck="false"
+            aria-label="Python code editor"
           />
+        ) : previewVisible && code.trim() ? (
+          <ScrollArea className="h-full flex-grow p-4">
+             <SyntaxHighlightedCode code={code} />
+          </ScrollArea>
+        ) : (
+           <div className="flex-grow flex items-center justify-center p-4">
+            <p className="text-muted-foreground text-center">
+              {showCodeEditor 
+                ? "Start typing your Python code or switch to Preview if code is already present." 
+                : "Code preview is shown here. Switch to 'Hand-holding' mode or an exercise with a snippet to edit code."}
+            </p>
+          </div>
         )}
       </CardContent>
       <CardFooter className="p-4 flex flex-col sm:flex-row justify-between items-center gap-2 border-t border-primary-foreground/20">
@@ -103,6 +130,7 @@ export function CodePanel({
             variant="secondary"
             className="bg-accent hover:bg-accent/90 text-accent-foreground"
             aria-label="Run code"
+            disabled={!code.trim()}
           >
             <Play className="mr-2 h-4 w-4" />
             Run
@@ -111,7 +139,7 @@ export function CodePanel({
             onClick={handleImproveCode}
             variant="secondary"
             className="bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground"
-            disabled={isLoadingImprove}
+            disabled={isLoadingImprove || !code.trim()}
             aria-label="Improve code"
           >
             {isLoadingImprove ? (
@@ -125,8 +153,8 @@ export function CodePanel({
         <Button
           onClick={handleSubmitCode}
           variant="default"
-          className="bg-green-500 hover:bg-green-600 text-white"
-          disabled={isLoadingSubmit}
+          className="bg-green-500 hover:bg-green-600 text-white dark:bg-green-600 dark:hover:bg-green-700"
+          disabled={isLoadingSubmit || !code.trim()}
           aria-label="Submit code"
         >
           {isLoadingSubmit ? (

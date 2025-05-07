@@ -5,18 +5,25 @@ import { AppHeader } from '@/components/codeleap/app-header';
 import { CodePanel } from '@/components/codeleap/code-panel';
 import { ExercisePanel } from '@/components/codeleap/exercise-panel';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
-import { generateExerciseAction, improveCodeAction, explainConceptAction } from '../actions';
-import { RefreshCcw } from 'lucide-react';
+import { generateExerciseAction, improveCodeAction, explainConceptAction, generateLearningPlanAction } from '../actions';
+import type { LearningStep, GenerateLearningPlanOutput } from '@/ai/flows/generate-learning-plan';
+import type { GenerateExerciseInput } from '@/ai/flows/generate-exercise';
+import { RefreshCcw, Zap, BookHeart, Loader2 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/codeleap/loading-spinner';
 
 export interface Exercise {
   question: string;
-  codeSnippet: string;
+  codeSnippet?: string; // Optional for challenge mode
   solution: string;
   topic: string;
-  documentation: string; // Added for explainConcept
-  exampleCode: string; // Added for explainConcept
+  documentation: string;
+  exampleCode: string;
 }
 
 export interface Feedback {
@@ -31,7 +38,8 @@ export interface Explanation {
   application: string;
 }
 
-// Default values for generating an exercise
+type LearningMode = 'hand-holding' | 'challenge';
+
 const DEFAULT_TOPIC = "Basic Python Output and Variables";
 const DEFAULT_DOCUMENTATION = "Python basics include variables for storing data (e.g., name = \"Alice\"), the print() function for displaying output (e.g., print(\"Hello\")), and f-strings for formatted output (e.g., print(f\"Hello, {name}\")). Arithmetic operations like addition (+), subtraction (-), multiplication (*), and division (/) are also fundamental.";
 const DEFAULT_EXAMPLE_CODE = 
@@ -47,19 +55,97 @@ print(f"The sum of {x} and {y} is {sum_result}")
 `;
 
 export function CodeLeapPageClient() {
+  const [learningContent, setLearningContent] = useState('');
+  const [learningPlan, setLearningPlan] = useState<GenerateLearningPlanOutput | null>(null);
+  const [currentPlanStepIndex, setCurrentPlanStepIndex] = useState<number | null>(null);
+  
   const [currentExercise, setCurrentExercise] = useState<Exercise | null>(null);
   const [userCode, setUserCode] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [explanation, setExplanation] = useState<Explanation | null>(null);
+  const [learningMode, setLearningMode] = useState<LearningMode>('hand-holding');
 
-  const [isLoadingExercise, setIsLoadingExercise] = useState(true);
+  const [isLoadingLearningPlan, setIsLoadingLearningPlan] = useState(false);
+  const [isLoadingExercise, setIsLoadingExercise] = useState(false);
   const [isLoadingImprove, setIsLoadingImprove] = useState(false);
   const [isLoadingSubmit, setIsLoadingSubmit] = useState(false);
   const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
 
   const { toast } = useToast();
 
-  const fetchNewExercise = useCallback(async () => {
+  const fetchExerciseForStep = useCallback(async (stepIndex: number, plan: GenerateLearningPlanOutput, mode: LearningMode) => {
+    if (!plan || stepIndex < 0 || stepIndex >= plan.learningSteps.length) {
+      toast({ title: 'Invalid Plan Step', description: 'Cannot fetch exercise for this step.', variant: 'destructive' });
+      return;
+    }
+    setIsLoadingExercise(true);
+    setFeedback(null);
+    setExplanation(null);
+    setCurrentExercise(null);
+    setUserCode('');
+
+    const step = plan.learningSteps[stepIndex];
+    try {
+      const exerciseInput: GenerateExerciseInput = {
+        topic: step.topic,
+        documentation: step.extractedDocumentation || DEFAULT_DOCUMENTATION,
+        exampleCode: step.extractedExampleCode || DEFAULT_EXAMPLE_CODE,
+        learningMode: mode,
+      };
+      const aiExercise = await generateExerciseAction(exerciseInput);
+      setCurrentExercise({
+        ...aiExercise,
+        topic: step.topic,
+        documentation: exerciseInput.documentation,
+        exampleCode: exerciseInput.exampleCode,
+      });
+      setUserCode(aiExercise.codeSnippet || (mode === 'challenge' ? `# Start coding for: ${step.topic}\n` : ""));
+      setCurrentPlanStepIndex(stepIndex);
+    } catch (error) {
+      toast({
+        title: 'Error Generating Exercise',
+        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingExercise(false);
+    }
+  }, [toast]);
+
+  const handleGenerateLearningPlan = async () => {
+    if (!learningContent.trim()) {
+      toast({ title: 'Empty Content', description: 'Please paste some content to generate a plan.', variant: 'destructive' });
+      return;
+    }
+    setIsLoadingLearningPlan(true);
+    setLearningPlan(null);
+    setCurrentExercise(null);
+    setCurrentPlanStepIndex(null);
+    setFeedback(null);
+    setExplanation(null);
+    setUserCode('');
+
+    try {
+      const plan = await generateLearningPlanAction({ content: learningContent });
+      setLearningPlan(plan);
+      if (plan.learningSteps.length > 0) {
+        fetchExerciseForStep(0, plan, learningMode);
+      } else {
+        toast({ title: 'Empty Plan', description: 'The AI could not generate learning steps from the content.', variant: 'destructive'});
+      }
+    } catch (error) {
+      toast({
+        title: 'Error Generating Learning Plan',
+        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingLearningPlan(false);
+    }
+  };
+
+  // Fetch default exercise if no plan exists initially
+  const fetchDefaultExercise = useCallback(async () => {
     setIsLoadingExercise(true);
     setFeedback(null);
     setExplanation(null);
@@ -68,38 +154,48 @@ export function CodeLeapPageClient() {
         topic: DEFAULT_TOPIC,
         documentation: DEFAULT_DOCUMENTATION,
         exampleCode: DEFAULT_EXAMPLE_CODE,
+        learningMode: learningMode, // Use current mode
       });
       setCurrentExercise({
         ...aiExercise,
-        topic: DEFAULT_TOPIC, // Pass along for explanation context
+        topic: DEFAULT_TOPIC,
         documentation: DEFAULT_DOCUMENTATION,
         exampleCode: DEFAULT_EXAMPLE_CODE
       });
-      setUserCode(aiExercise.codeSnippet); // Initialize editor with snippet
+      setUserCode(aiExercise.codeSnippet || (learningMode === 'challenge' ? `# Start coding for: ${DEFAULT_TOPIC}\n` : ""));
     } catch (error) {
       toast({
         title: 'Error Generating Exercise',
         description: error instanceof Error ? error.message : 'An unknown error occurred.',
         variant: 'destructive',
       });
-      setCurrentExercise(null); // Clear exercise on error
     } finally {
       setIsLoadingExercise(false);
     }
-  }, [toast]);
+  }, [toast, learningMode]);
 
   useEffect(() => {
-    fetchNewExercise();
-  }, [fetchNewExercise]);
+    if (!learningPlan) {
+      fetchDefaultExercise();
+    }
+  }, [fetchDefaultExercise, learningPlan]);
+  
+  // Refetch exercise if learning mode changes and there's a current step/plan
+  useEffect(() => {
+    if (learningPlan && currentPlanStepIndex !== null) {
+      fetchExerciseForStep(currentPlanStepIndex, learningPlan, learningMode);
+    } else if (!learningPlan) { // Or fetch default if no plan
+        fetchDefaultExercise();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [learningMode]); // Only re-run when learningMode changes
 
   const handleRunCode = (code: string) => {
-    // For now, this is a placeholder. In a real app, this would execute Python.
     console.log('Running code:', code);
     toast({
       title: 'Code "Run"',
       description: 'Code execution simulation. Output would appear in a console.',
     });
-    // No feedback change for run, or a very generic one
   };
 
   const handleImproveCode = async (code: string) => {
@@ -144,7 +240,6 @@ export function CodeLeapPageClient() {
         question: currentExercise.question,
       });
 
-      // Basic correctness check (very naive)
       const normalize = (s: string) => s.replace(/\s+/g, '').trim();
       const isCorrect = normalize(code) === normalize(currentExercise.solution);
 
@@ -194,27 +289,114 @@ export function CodeLeapPageClient() {
       setIsLoadingExplanation(false);
     }
   };
+
+  const handleNextStep = () => {
+    if (learningPlan && currentPlanStepIndex !== null && currentPlanStepIndex < learningPlan.learningSteps.length - 1) {
+      fetchExerciseForStep(currentPlanStepIndex + 1, learningPlan, learningMode);
+    } else {
+      toast({ title: "End of Plan", description: "You've reached the last step of this learning plan."});
+    }
+  };
+
+  const handlePrevStep = () => {
+     if (learningPlan && currentPlanStepIndex !== null && currentPlanStepIndex > 0) {
+      fetchExerciseForStep(currentPlanStepIndex - 1, learningPlan, learningMode);
+    } else {
+      toast({ title: "Start of Plan", description: "You are at the first step."});
+    }
+  };
   
+  const currentLearningStep = learningPlan && currentPlanStepIndex !== null ? learningPlan.learningSteps[currentPlanStepIndex] : null;
 
   return (
     <div className="flex flex-col h-screen bg-secondary">
       <AppHeader />
-      <main className="flex-grow container mx-auto p-4 flex flex-col gap-4">
-        <div className="flex justify-end">
-          <Button onClick={fetchNewExercise} disabled={isLoadingExercise} variant="outline" className="border-accent text-accent hover:bg-accent/10 hover:text-accent">
-            {isLoadingExercise ? <LoadingSpinner size={16} className="mr-2" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-            New Exercise
-          </Button>
-        </div>
+      <main className="flex-grow container mx-auto p-4 flex flex-col gap-6">
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-xl">What do you want to learn today?</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Textarea
+              placeholder="Paste your lecture notes, documentation, or any text content here..."
+              value={learningContent}
+              onChange={(e) => setLearningContent(e.target.value)}
+              rows={6}
+              className="bg-background border-border focus:ring-accent"
+            />
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <RadioGroup defaultValue="hand-holding" onValueChange={(value: LearningMode) => setLearningMode(value)} className="flex gap-4 items-center">
+                    <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="hand-holding" id="r1" />
+                        <Label htmlFor="r1" className="flex items-center gap-1"><BookHeart className="h-4 w-4 text-blue-500"/> Hand-holding Mode</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="challenge" id="r2" />
+                        <Label htmlFor="r2" className="flex items-center gap-1"><Zap className="h-4 w-4 text-orange-500"/> Challenge Mode</Label>
+                    </div>
+                </RadioGroup>
+                <Button onClick={handleGenerateLearningPlan} disabled={isLoadingLearningPlan || !learningContent.trim()} className="bg-accent text-accent-foreground hover:bg-accent/90 w-full sm:w-auto">
+                {isLoadingLearningPlan ? <LoadingSpinner size={16} className="mr-2" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                Generate Learning Plan
+                </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {learningPlan && (
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-lg">Your Learning Plan: {learningPlan.title}</CardTitle>
+               {currentLearningStep && <p className="text-sm text-muted-foreground">Current Step: {currentPlanStepIndex! + 1} of {learningPlan.learningSteps.length} - {currentLearningStep.topic}</p>}
+            </CardHeader>
+            <CardContent>
+              <Accordion type="single" collapsible className="w-full" value={currentPlanStepIndex !== null ? `item-${currentPlanStepIndex}` : undefined}>
+                {learningPlan.learningSteps.map((step, index) => (
+                  <AccordionItem value={`item-${index}`} key={index}>
+                    <AccordionTrigger 
+                        onClick={() => fetchExerciseForStep(index, learningPlan, learningMode)}
+                        disabled={isLoadingExercise && currentPlanStepIndex === index}
+                        className={currentPlanStepIndex === index ? "text-accent" : ""}
+                    >
+                        Step {index + 1}: {step.topic}
+                        {isLoadingExercise && currentPlanStepIndex === index && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                    </AccordionTrigger>
+                    <AccordionContent className="prose prose-sm max-w-none">
+                      <p>{step.description}</p>
+                      {step.extractedDocumentation && (
+                        <>
+                          <h5 className="font-semibold">Key Documentation:</h5>
+                          <blockquote className="border-l-4 pl-4 italic text-muted-foreground">{step.extractedDocumentation}</blockquote>
+                        </>
+                      )}
+                       {step.extractedExampleCode && (
+                        <>
+                          <h5 className="font-semibold">Example Code:</h5>
+                          <pre className="bg-muted p-2 rounded-md overflow-x-auto"><code>{step.extractedExampleCode}</code></pre>
+                        </>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+               <div className="mt-4 flex justify-between">
+                <Button onClick={handlePrevStep} disabled={currentPlanStepIndex === null || currentPlanStepIndex === 0 || isLoadingExercise} variant="outline">Previous Step</Button>
+                <Button onClick={handleNextStep} disabled={currentPlanStepIndex === null || currentPlanStepIndex === learningPlan.learningSteps.length - 1 || isLoadingExercise} variant="outline">Next Step</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0">
           <ExercisePanel
             exercise={currentExercise}
             explanation={explanation}
             feedback={feedback}
-            isLoadingExercise={isLoadingExercise}
+            isLoadingExercise={isLoadingExercise && !learningPlan}
             isLoadingExplanation={isLoadingExplanation}
             isLoadingFeedback={isLoadingImprove || isLoadingSubmit}
             onExplainConcept={handleExplainConcept}
+            learningMode={learningMode}
           />
           <CodePanel
             initialCode={currentExercise?.codeSnippet || userCode || "print('Hello, CodeLeap!')"}
@@ -223,6 +405,7 @@ export function CodeLeapPageClient() {
             onSubmitCode={handleSubmitCode}
             isLoadingImprove={isLoadingImprove}
             isLoadingSubmit={isLoadingSubmit}
+            showCodeEditor={learningMode === 'hand-holding' || (currentExercise?.codeSnippet !== undefined && currentExercise?.codeSnippet !== "")}
           />
         </div>
       </main>

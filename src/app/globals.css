@@ -52,6 +52,24 @@ body {
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 210 10% 88%;
     --sidebar-ring: 174 60% 43%;
+
+    /* Prose styles for light mode */
+    --prose-body: hsl(var(--foreground));
+    --prose-headings: hsl(var(--foreground));
+    --prose-lead: hsl(var(--muted-foreground));
+    --prose-links: hsl(var(--accent));
+    --prose-bold: hsl(var(--foreground));
+    --prose-counters: hsl(var(--muted-foreground));
+    --prose-bullets: hsl(var(--border));
+    --prose-hr: hsl(var(--border));
+    --prose-quotes: hsl(var(--foreground));
+    --prose-quote-borders: hsl(var(--accent));
+    --prose-captions: hsl(var(--muted-foreground));
+    --prose-code: hsl(var(--foreground));
+    --prose-pre-code: hsl(var(--card-foreground));
+    --prose-pre-bg: hsl(var(--muted));
+    --prose-th-borders: hsl(var(--border));
+    --prose-td-borders: hsl(var(--border));
   }
 
   .dark {
@@ -76,8 +94,8 @@ body {
     --accent: 213 10% 16%; 
     --accent-foreground: 210 17% 90%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%; /* Adjusted for dark mode, less bright */
+    --destructive-foreground: 0 0% 98%; /* Keep light text on dark red */
 
     --border: 213 10% 25%;
     --input: 213 10% 25%;
@@ -97,6 +115,40 @@ body {
     --sidebar-accent-foreground: 210 17% 90%;
     --sidebar-border: 213 10% 25%;
     --sidebar-ring: 174 60% 43%;
+
+    /* Prose styles for dark mode */
+    --prose-body: hsl(var(--foreground));
+    --prose-headings: hsl(var(--foreground));
+    --prose-lead: hsl(var(--muted-foreground));
+    --prose-links: hsl(var(--primary)); /* Use primary color for links in dark mode */
+    --prose-bold: hsl(var(--foreground));
+    --prose-counters: hsl(var(--muted-foreground));
+    --prose-bullets: hsl(var(--border));
+    --prose-hr: hsl(var(--border));
+    --prose-quotes: hsl(var(--foreground));
+    --prose-quote-borders: hsl(var(--primary));
+    --prose-captions: hsl(var(--muted-foreground));
+    --prose-code: hsl(var(--foreground));
+    --prose-pre-code: hsl(var(--card-foreground));
+    --prose-pre-bg: hsl(var(--card)); /* Use card background for pre */
+    --prose-th-borders: hsl(var(--border));
+    --prose-td-borders: hsl(var(--border));
+    --prose-invert-body: hsl(var(--foreground));
+    --prose-invert-headings: hsl(var(--foreground));
+    --prose-invert-lead: hsl(var(--muted-foreground));
+    --prose-invert-links: hsl(var(--primary));
+    --prose-invert-bold: hsl(var(--foreground));
+    --prose-invert-counters: hsl(var(--muted-foreground));
+    --prose-invert-bullets: hsl(var(--border));
+    --prose-invert-hr: hsl(var(--border));
+    --prose-invert-quotes: hsl(var(--foreground));
+    --prose-invert-quote-borders: hsl(var(--primary));
+    --prose-invert-captions: hsl(var(--muted-foreground));
+    --prose-invert-code: hsl(var(--foreground));
+    --prose-invert-pre-code: hsl(var(--card-foreground));
+    --prose-invert-pre-bg: hsl(var(--card));
+    --prose-invert-th-borders: hsl(var(--border));
+    --prose-invert-td-borders: hsl(var(--border));
   }
 }
 
@@ -108,6 +160,54 @@ body {
     @apply bg-background text-foreground;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+   /* Ensure prose styles apply correctly */
+  .prose {
+    color: hsl(var(--prose-body));
+  }
+  .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+    color: hsl(var(--prose-headings));
+  }
+  .prose a {
+    color: hsl(var(--prose-links));
+  }
+  .prose strong {
+    color: hsl(var(--prose-bold));
+  }
+  .prose blockquote {
+    color: hsl(var(--prose-quotes));
+    border-left-color: hsl(var(--prose-quote-borders));
+  }
+  .prose code {
+    color: hsl(var(--prose-code));
+  }
+  .prose pre {
+    background-color: hsl(var(--prose-pre-bg));
+    color: hsl(var(--prose-pre-code));
+  }
+  /* Dark mode prose styles */
+  .dark .prose {
+    color: hsl(var(--prose-invert-body));
+  }
+  .dark .prose h1, .dark .prose h2, .dark .prose h3, .dark .prose h4, .dark .prose h5, .dark .prose h6 {
+    color: hsl(var(--prose-invert-headings));
+  }
+  .dark .prose a {
+    color: hsl(var(--prose-invert-links));
+  }
+  .dark .prose strong {
+    color: hsl(var(--prose-invert-bold));
+  }
+  .dark .prose blockquote {
+    color: hsl(var(--prose-invert-quotes));
+    border-left-color: hsl(var(--prose-invert-quote-borders));
+  }
+  .dark .prose code {
+    color: hsl(var(--prose-invert-code));
+  }
+  .dark .prose pre {
+    background-color: hsl(var(--prose-invert-pre-bg));
+    color: hsl(var(--prose-invert-pre-code));
   }
 }
 
