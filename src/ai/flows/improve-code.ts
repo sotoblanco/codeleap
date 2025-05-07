@@ -37,9 +37,9 @@ const improveCodePrompt = ai.definePrompt({
   You must take into account the programming language of the code and the coding question the code is trying to answer, if provided.
 
   Code:
-  ${"```"}{{{language}}}
+  \`\`\`{{{language}}}
   {{{code}}}
-  ${"```"}
+  \`\`\`
 
   Coding Question (if applicable):
   {{{question}}}
