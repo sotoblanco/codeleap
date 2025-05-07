@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -19,7 +18,7 @@ import type { GenerateExerciseInput, GenerateExerciseOutput } from '@/ai/flows/g
 import { RefreshCcw, Zap, BookHeart, Loader2, Link2 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/codeleap/loading-spinner';
 import type { Explanation, Feedback, Exercise} from '@/components/codeleap/types';
-import { cn } from '@/lib/utils'; // Added import
+import { cn } from '@/lib/utils';
 
 type LearningMode = 'hand-holding' | 'challenge';
 type ExpandedPanel = 'exercise' | 'code' | null;
@@ -61,8 +60,13 @@ export function CodeLeapPageClient() {
   const { toast } = useToast();
 
   const fetchExerciseForStep = useCallback(async (stepIndex: number, plan: GenerateLearningPlanOutput, mode: LearningMode) => {
-    if (!plan || stepIndex < 0 || stepIndex >= plan.learningSteps.length) {
+    if (isNaN(stepIndex) || !plan || stepIndex < 0 || stepIndex >= plan.learningSteps.length) {
       toast({ title: 'Invalid Plan Step', description: 'Cannot fetch exercise for this step.', variant: 'destructive' });
+      setCurrentPlanStepIndex(null); // Reset if invalid
+      setCurrentExercise(null);
+      setUserCode('');
+      setFeedback(null);
+      setExplanation(null);
       return;
     }
     setIsLoadingExercise(true);
@@ -94,6 +98,7 @@ export function CodeLeapPageClient() {
         description: error instanceof Error ? error.message : 'An unknown error occurred.',
         variant: 'destructive',
       });
+      setCurrentPlanStepIndex(null); // Reset on error
     } finally {
       setIsLoadingExercise(false);
     }
@@ -113,13 +118,14 @@ export function CodeLeapPageClient() {
     setUserCode('');
 
     try {
-      const plan = await generateLearningPlanAction({ 
+      const plan = await generateLearningPlanAction({
         content: learningContent,
         documentationUrl: documentationUrl.trim() || undefined,
         codeUrl: codeUrl.trim() || undefined,
       });
       setLearningPlan(plan);
       if (plan.learningSteps.length > 0) {
+        // Automatically fetch exercise for the first step
         fetchExerciseForStep(0, plan, learningMode);
       } else {
         toast({ title: 'Empty Plan', description: 'The AI could not generate learning steps from the provided input. Ensure URLs are accessible and return text content.', variant: 'destructive'});
@@ -137,9 +143,14 @@ export function CodeLeapPageClient() {
   };
 
   const fetchDefaultExercise = useCallback(async () => {
+    // Only fetch default if no plan is active and no specific step is selected.
+    if (learningPlan || currentPlanStepIndex !== null) return;
+
     setIsLoadingExercise(true);
     setFeedback(null);
     setExplanation(null);
+    setCurrentExercise(null);
+    setUserCode('');
     try {
       const aiExercise = await generateExerciseAction({
         topic: DEFAULT_TOPIC,
@@ -163,22 +174,27 @@ export function CodeLeapPageClient() {
     } finally {
       setIsLoadingExercise(false);
     }
-  }, [toast, learningMode]);
+  }, [toast, learningMode, learningPlan, currentPlanStepIndex]);
 
+
+  // Effect for initial load and when learningPlan is cleared
   useEffect(() => {
-    if (!learningPlan) {
+    if (!learningPlan && currentPlanStepIndex === null) {
       fetchDefaultExercise();
     }
-  }, [fetchDefaultExercise, learningPlan]);
+  }, [learningPlan, currentPlanStepIndex, fetchDefaultExercise]);
 
+  // Effect for learning mode changes
   useEffect(() => {
     if (learningPlan && currentPlanStepIndex !== null) {
       fetchExerciseForStep(currentPlanStepIndex, learningPlan, learningMode);
-    } else if (!learningPlan) { // Only fetch default if no plan and no current step (i.e. initial load or plan cleared)
-        fetchDefaultExercise();
+    } else if (!learningPlan && currentPlanStepIndex === null) {
+      // If no plan and no step selected (e.g. after clearing plan or deselecting step)
+      fetchDefaultExercise();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [learningMode]); // Removed learningPlan and currentPlanStepIndex to avoid loop with fetchExerciseForStep
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [learningMode]); // This effect should primarily react to learningMode changes
+
 
   const handleRunCode = (code: string) => {
     console.log('Code submitted for simulation:', code);
@@ -241,7 +257,7 @@ export function CodeLeapPageClient() {
       toast({
         title: isCorrect ? 'Submission Correct!' : 'Submission Feedback',
         description: 'Check the feedback panel.',
-        variant: isCorrect ? 'default' : 'default', 
+        variant: isCorrect ? 'default' : 'default',
       });
     } catch (error) {
       toast({
@@ -351,9 +367,9 @@ export function CodeLeapPageClient() {
                         <Label htmlFor="r2" className="flex items-center gap-1"><Zap className="h-4 w-4 text-orange-500"/> Challenge Mode</Label>
                     </div>
                 </RadioGroup>
-                <Button 
-                    onClick={handleGenerateLearningPlan} 
-                    disabled={isLoadingLearningPlan || (!learningContent.trim() && !documentationUrl.trim() && !codeUrl.trim())} 
+                <Button
+                    onClick={handleGenerateLearningPlan}
+                    disabled={isLoadingLearningPlan || (!learningContent.trim() && !documentationUrl.trim() && !codeUrl.trim())}
                     className="bg-accent text-accent-foreground hover:bg-accent/90 w-full sm:w-auto"
                 >
                 {isLoadingLearningPlan ? <LoadingSpinner size={16} className="mr-2" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
@@ -370,12 +386,44 @@ export function CodeLeapPageClient() {
                {currentLearningStep && <p className="text-sm text-muted-foreground">Current Step: {currentPlanStepIndex! + 1} of {learningPlan.learningSteps.length} - {currentLearningStep.topic}</p>}
             </CardHeader>
             <CardContent>
-              <Accordion type="single" collapsible className="w-full" value={currentPlanStepIndex !== null ? `item-${currentPlanStepIndex}` : undefined} 
-                onValueChange={(value) => {
-                  const newIndex = parseInt(value.split('-')[1]);
-                  if (currentPlanStepIndex !== newIndex && learningPlan) { 
+              <Accordion
+                type="single"
+                collapsible
+                className="w-full"
+                value={currentPlanStepIndex !== null ? `item-${currentPlanStepIndex}` : undefined}
+                onValueChange={(accordionValue) => {
+                  if (!learningPlan) {
+                    setCurrentPlanStepIndex(null);
+                    setCurrentExercise(null);
+                    setUserCode('');
+                    setFeedback(null);
+                    setExplanation(null);
+                    return;
+                  }
+
+                  if (!accordionValue) { // An item was closed by clicking its trigger
+                    setCurrentPlanStepIndex(null);
+                    setCurrentExercise(null);
+                    setUserCode('');
+                    setFeedback(null);
+                    setExplanation(null);
+                    return;
+                  }
+
+                  const newIndexStr = accordionValue.split('-')[1];
+                  const newIndex = parseInt(newIndexStr);
+
+                  if (isNaN(newIndex) || newIndex < 0 || newIndex >= learningPlan.learningSteps.length) {
+                    toast({ title: 'Error', description: 'Invalid accordion step selected.', variant: 'destructive' });
+                    // Avoid setting currentPlanStepIndex to NaN or invalid index
+                    return;
+                  }
+
+                  if (currentPlanStepIndex !== newIndex) {
                     fetchExerciseForStep(newIndex, learningPlan, learningMode);
                   }
+                  // If currentPlanStepIndex === newIndex, accordionValue matches current state.
+                  // This can happen on re-renders. No action needed. fetchExerciseForStep sets currentPlanStepIndex.
                 }}
               >
                 {learningPlan.learningSteps.map((step, index) => (
@@ -406,14 +454,14 @@ export function CodeLeapPageClient() {
                 ))}
               </Accordion>
                <div className="mt-4 flex justify-between">
-                <Button onClick={handlePrevStep} disabled={currentPlanStepIndex === null || currentPlanStepIndex === 0 || isLoadingExercise} variant="outline">Previous Step</Button>
-                <Button onClick={handleNextStep} disabled={currentPlanStepIndex === null || currentPlanStepIndex === learningPlan.learningSteps.length - 1 || isLoadingExercise} variant="outline">Next Step</Button>
+                <Button onClick={handlePrevStep} disabled={isLoadingExercise || currentPlanStepIndex === null || currentPlanStepIndex === 0} variant="outline">Previous Step</Button>
+                <Button onClick={handleNextStep} disabled={isLoadingExercise || currentPlanStepIndex === null || currentPlanStepIndex === learningPlan.learningSteps.length - 1} variant="outline">Next Step</Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        <div className={cn("flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0", 
+        <div className={cn("flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0",
           {"md:grid-cols-1" : expandedPanel !== null}
         )}>
           {(expandedPanel === null || expandedPanel === 'exercise') && (
@@ -421,7 +469,7 @@ export function CodeLeapPageClient() {
               exercise={currentExercise}
               explanation={explanation}
               feedback={feedback}
-              isLoadingExercise={isLoadingExercise && (!learningPlan || currentPlanStepIndex === null)} 
+              isLoadingExercise={isLoadingExercise && currentPlanStepIndex === null } // Only show global loading if no specific step is loading
               isLoadingExplanation={isLoadingExplanation}
               isLoadingFeedback={isLoadingImprove || isLoadingSubmit}
               onExplainConcept={handleExplainConcept}
@@ -433,14 +481,14 @@ export function CodeLeapPageClient() {
           )}
           {(expandedPanel === null || expandedPanel === 'code') && (
             <CodePanel
-              key={currentExercise?.topic || 'default-editor'} 
+              key={currentExercise?.topic || userCode || 'default-editor'}
               initialCode={currentExercise?.codeSnippet || userCode || (learningMode === 'challenge' && currentExercise ? `# Start coding for: ${currentExercise.topic}\n` : "print('Hello, CodeLeap!')" )}
               onRunCode={handleRunCode}
               onImproveCode={handleImproveCode}
               onSubmitCode={handleSubmitCode}
               isLoadingImprove={isLoadingImprove}
               isLoadingSubmit={isLoadingSubmit}
-              showCodeEditor={true} 
+              showCodeEditor={true}
               isExpanded={expandedPanel === 'code'}
               onToggleExpand={() => handleTogglePanelExpand('code')}
               className={cn(expandedPanel === 'code' ? "md:col-span-1" : "", {"hidden": expandedPanel === 'exercise'})}
