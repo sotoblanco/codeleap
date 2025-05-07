@@ -5,43 +5,34 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Lightbulb, BookOpen, MessageSquare, Zap } from 'lucide-react';
+import { Lightbulb, BookOpen, MessageSquare, Zap, Maximize2, Minimize2 } from 'lucide-react';
 import type { Exercise, Explanation, Feedback } from '@/app/codeleap/page-client';
 import { LoadingSpinner } from './loading-spinner';
 import { Button } from '@/components/ui/button'; 
 import type { LearningMode } from '@/app/codeleap/page-client';
+import { cn } from '@/lib/utils';
 
 
 const SimpleMarkdown = ({ content }: { content: string }) => {
-  // Clean up standalone "$&" tokens. \b ensures it's a "word" boundary.
   let text = content.replace(/\b\$&\b/g, '').trim();
 
-  // Process unordered lists (lines starting with '-' or '*')
-  // Converts them to <li> items, then wraps blocks of <li> into <ul>
   text = text.replace(/^\s*[-*]\s+(.+)/gm, '<li>$1</li>');
   text = text.replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, (match) => {
     if (match.trim().startsWith('<ul>') || match.trim().startsWith('<ol>')) {
-      return match; // Avoid re-wrapping
+      return match; 
     }
     return `<ul>${match.trim()}</ul>`;
   });
 
-  // Process ordered lists (lines starting with '1.', '2.', etc.)
-  // Converts them to <li> items, then wraps blocks of <li> into <ol>
-  // (if not already part of a <ul>)
   text = text.replace(/^\s*\d+\.\s+(.+)/gm, '<li>$1</li>');
   text = text.replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, (match, _p1, offset, string) => {
     const precedingContext = string.substring(Math.max(0, offset - 15), offset);
-    // If it looks like it's inside a <ul> or already wrapped, don't wrap in <ol>
     if (precedingContext.match(/<ul>\s*$/si) || match.trim().startsWith('<ul>') || match.trim().startsWith('<ol>')) {
       return match;
     }
     return `<ol>${match.trim()}</ol>`;
   });
 
-  // Convert newlines to <br />
-  // This should be done carefully to avoid <br/> inside list structures if not desired.
-  // For simplicity here, it's a global replacement.
   text = text.replace(/\n/g, '<br />');
 
   return <div dangerouslySetInnerHTML={{ __html: text }} />;
@@ -57,6 +48,9 @@ interface ExercisePanelProps {
   isLoadingFeedback: boolean;
   onExplainConcept: () => Promise<void>;
   learningMode: LearningMode;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  className?: string;
 }
 
 export function ExercisePanel({
@@ -68,21 +62,36 @@ export function ExercisePanel({
   isLoadingFeedback,
   onExplainConcept,
   learningMode,
+  isExpanded,
+  onToggleExpand,
+  className,
 }: ExercisePanelProps) {
   return (
-    <Card className="h-full flex flex-col shadow-xl rounded-lg">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-2xl font-bold text-primary">
-          {learningMode === 'challenge' ? <Zap className="inline h-6 w-6 mr-2 text-orange-500" /> : <Lightbulb className="inline h-6 w-6 mr-2 text-blue-500" />}
-          Coding {learningMode === 'challenge' ? 'Challenge' : 'Exercise'}
-        </CardTitle>
-        <CardDescription>
-          {learningMode === 'challenge' 
-            ? 'Solve the problem from scratch. Good luck!' 
-            : 'Read the instructions and complete the code.'}
-        </CardDescription>
+    <Card className={cn("h-full flex flex-col shadow-xl rounded-lg", className)}>
+      <CardHeader className="pb-2 flex flex-row justify-between items-center">
+        <div>
+            <CardTitle className="text-2xl font-bold text-primary">
+            {learningMode === 'challenge' ? <Zap className="inline h-6 w-6 mr-2 text-orange-500" /> : <Lightbulb className="inline h-6 w-6 mr-2 text-blue-500" />}
+            Coding {learningMode === 'challenge' ? 'Challenge' : 'Exercise'}
+            </CardTitle>
+            <CardDescription>
+            {learningMode === 'challenge' 
+                ? 'Solve the problem from scratch. Good luck!' 
+                : 'Read the instructions and complete the code.'}
+            </CardDescription>
+        </div>
+        <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggleExpand}
+            className="text-primary hover:bg-muted h-7 w-7"
+            aria-label={isExpanded ? "Minimize panel" : "Expand panel"}
+            aria-expanded={isExpanded}
+        >
+            {isExpanded ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+        </Button>
       </CardHeader>
-      <CardContent className="flex-grow p-0 min-h-0"> {/* Added min-h-0 here */}
+      <CardContent className="flex-grow p-0 min-h-0">
         <Tabs defaultValue="question" className="h-full flex flex-col">
           <TabsList className="grid w-full grid-cols-3 mx-auto sticky top-0 bg-muted/50 p-1 rounded-none border-b">
             <TabsTrigger value="question" className="data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">
@@ -187,7 +196,6 @@ export function ExercisePanel({
                     {feedback.suggestions && (
                       <>
                         <h5 className="font-semibold mt-2">Suggestions:</h5>
-                        {/* Render suggestions as Markdown if they might contain it */}
                         <SimpleMarkdown content={feedback.suggestions} />
                       </>
                     )}
@@ -205,4 +213,3 @@ export function ExercisePanel({
     </Card>
   );
 }
-

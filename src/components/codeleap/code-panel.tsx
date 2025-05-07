@@ -1,22 +1,27 @@
+
 'use client';
 
 import type { editor } from 'monaco-editor'; // Using type import
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Play, Wand2, CheckCircle, Eye, Code, Terminal } from 'lucide-react';
+import { Play, Wand2, CheckCircle, Eye, Code, Terminal, Maximize2, Minimize2 } from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from './loading-spinner';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 interface CodePanelProps {
   initialCode: string;
-  onRunCode: (code: string) => void; // This prop will still be called (e.g., for a toast)
+  onRunCode: (code: string) => void; 
   onImproveCode: (code: string) => Promise<void>;
   onSubmitCode: (code: string) => Promise<void>;
   isLoadingImprove: boolean;
   isLoadingSubmit: boolean;
   showCodeEditor: boolean;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  className?: string;
 }
 
 // Basic placeholder for syntax highlighting.
@@ -70,6 +75,9 @@ export function CodePanel({
   isLoadingImprove,
   isLoadingSubmit,
   showCodeEditor,
+  isExpanded,
+  onToggleExpand,
+  className,
 }: CodePanelProps) {
   const [code, setCode] = useState(initialCode);
   const [showSyntaxHighlighted, setShowSyntaxHighlighted] = useState(false);
@@ -78,7 +86,7 @@ export function CodePanel({
 
   useEffect(() => {
     setCode(initialCode);
-    setConsoleOutput(null); // Reset console on new exercise/code
+    setConsoleOutput(null); 
     setShowSyntaxHighlighted(showCodeEditor ? false : !!initialCode);
   }, [initialCode, showCodeEditor]);
 
@@ -117,7 +125,7 @@ export function CodePanel({
   const handleInternalRunCode = () => {
     const output = simulatePrintStatements(code);
     setConsoleOutput(output);
-    onRunCode(code); // Call the prop, which might show a toast or log
+    onRunCode(code); 
   };
 
   const handleImproveCode = async () => {
@@ -132,24 +140,35 @@ export function CodePanel({
   const previewVisible = showSyntaxHighlighted || !showCodeEditor;
 
   return (
-    <Card className="h-full flex flex-col bg-primary text-primary-foreground shadow-2xl rounded-lg">
+    <Card className={cn("h-full flex flex-col bg-primary text-primary-foreground shadow-2xl rounded-lg", className)}>
       <CardHeader className="flex flex-row justify-between items-center">
         <CardTitle className="text-xl font-semibold text-primary-foreground">Python Editor</CardTitle>
-         {showCodeEditor && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => setShowSyntaxHighlighted(!showSyntaxHighlighted)}
-              className="text-primary-foreground hover:bg-primary-foreground/10"
-              aria-label={showSyntaxHighlighted ? "Switch to Edit Mode" : "Switch to Preview Mode"}
+        <div className="flex items-center gap-2">
+          {showCodeEditor && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowSyntaxHighlighted(!showSyntaxHighlighted)}
+                className="text-primary-foreground hover:bg-primary-foreground/10"
+                aria-label={showSyntaxHighlighted ? "Switch to Edit Mode" : "Switch to Preview Mode"}
+              >
+                {showSyntaxHighlighted ? <Code className="mr-1 h-4 w-4" /> : <Eye className="mr-1 h-4 w-4" />}
+                {showSyntaxHighlighted ? "Edit" : "Preview"}
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleExpand}
+              className="text-primary-foreground hover:bg-primary-foreground/10 h-7 w-7"
+              aria-label={isExpanded ? "Minimize panel" : "Expand panel"}
+              aria-expanded={isExpanded}
             >
-              {showSyntaxHighlighted ? <Code className="mr-1 h-4 w-4" /> : <Eye className="mr-1 h-4 w-4" />}
-              {showSyntaxHighlighted ? "Edit" : "Preview"}
+              {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
-          )}
+        </div>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col p-0 relative">
-        {/* Editor/Preview Area */}
         <div className="flex-grow p-0 relative min-h-0">
           {editorVisible ? (
             <Textarea
@@ -163,7 +182,6 @@ export function CodePanel({
             />
           ) : previewVisible && code.trim() ? (
             <ScrollArea className="absolute inset-0">
-              {/* SyntaxHighlightedCode already has p-4 and bg */}
               <SyntaxHighlightedCode code={code} />
             </ScrollArea>
           ) : (
@@ -177,7 +195,6 @@ export function CodePanel({
           )}
         </div>
 
-        {/* Console Output Area */}
         {consoleOutput !== null && (
           <div className="p-4 border-t border-primary-foreground/20">
             <h4 className="mb-2 text-sm font-semibold text-primary-foreground/80 flex items-center">

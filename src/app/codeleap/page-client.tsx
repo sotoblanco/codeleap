@@ -40,6 +40,7 @@ export interface Explanation {
 }
 
 type LearningMode = 'hand-holding' | 'challenge';
+type ExpandedPanel = 'exercise' | 'code' | null;
 
 const DEFAULT_TOPIC = "Basic Python Output and Variables";
 const DEFAULT_DOCUMENTATION = "Python basics include variables for storing data (e.g., name = \"Alice\"), the print() function for displaying output (e.g., print(\"Hello\")), and f-strings for formatted output (e.g., print(f\"Hello, {name}\")). Arithmetic operations like addition (+), subtraction (-), multiplication (*), and division (/) are also fundamental.";
@@ -65,6 +66,7 @@ export function CodeLeapPageClient() {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [explanation, setExplanation] = useState<Explanation | null>(null);
   const [learningMode, setLearningMode] = useState<LearningMode>('hand-holding');
+  const [expandedPanel, setExpandedPanel] = useState<ExpandedPanel>(null);
 
   const [isLoadingLearningPlan, setIsLoadingLearningPlan] = useState(false);
   const [isLoadingExercise, setIsLoadingExercise] = useState(false);
@@ -190,8 +192,6 @@ export function CodeLeapPageClient() {
   }, [learningMode]);
 
   const handleRunCode = (code: string) => {
-    // The primary simulation logic is now in CodePanel.tsx.
-    // This can be used for additional logging or a generic toast if needed.
     console.log('Code submitted for simulation:', code);
     toast({
       title: 'Code "Run" Requested',
@@ -242,9 +242,6 @@ export function CodeLeapPageClient() {
       });
 
       const normalize = (s: string) => s.replace(/\s+/g, '').trim();
-      // For a more robust check, consider running the code in a safe environment
-      // and comparing output, or using an AST parser for structural comparison.
-      // For now, a normalized string comparison is a basic check.
       const isCorrect = normalize(code) === normalize(currentExercise.solution);
 
       setFeedback({
@@ -255,7 +252,7 @@ export function CodeLeapPageClient() {
       toast({
         title: isCorrect ? 'Submission Correct!' : 'Submission Feedback',
         description: 'Check the feedback panel.',
-        variant: isCorrect ? 'default' : 'default', // Could use a success variant for 'default'
+        variant: isCorrect ? 'default' : 'default',
       });
     } catch (error) {
       toast({
@@ -310,12 +307,16 @@ export function CodeLeapPageClient() {
     }
   };
 
+  const handleTogglePanelExpand = (panel: 'exercise' | 'code') => {
+    setExpandedPanel(current => current === panel ? null : panel);
+  };
+
   const currentLearningStep = learningPlan && currentPlanStepIndex !== null ? learningPlan.learningSteps[currentPlanStepIndex] : null;
 
   return (
     <div className="flex flex-col h-screen bg-secondary">
       <AppHeader />
-      <main className="flex-grow container mx-auto p-4 flex flex-col gap-6">
+      <main className="flex-grow w-full max-w-screen-2xl mx-auto p-4 flex flex-col gap-6">
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl">What do you want to learn today?</CardTitle>
@@ -392,25 +393,35 @@ export function CodeLeapPageClient() {
         )}
 
         <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0">
-          <ExercisePanel
-            exercise={currentExercise}
-            explanation={explanation}
-            feedback={feedback}
-            isLoadingExercise={isLoadingExercise && !learningPlan} // Show default loading only when no plan yet
-            isLoadingExplanation={isLoadingExplanation}
-            isLoadingFeedback={isLoadingImprove || isLoadingSubmit}
-            onExplainConcept={handleExplainConcept}
-            learningMode={learningMode}
-          />
-          <CodePanel
-            initialCode={currentExercise?.codeSnippet || userCode || (learningMode === 'challenge' && currentExercise ? `# Start coding for: ${currentExercise.topic}\n` : "print('Hello, CodeLeap!')" )}
-            onRunCode={handleRunCode}
-            onImproveCode={handleImproveCode}
-            onSubmitCode={handleSubmitCode}
-            isLoadingImprove={isLoadingImprove}
-            isLoadingSubmit={isLoadingSubmit}
-            showCodeEditor={true}
-          />
+          {expandedPanel === 'code' && currentExercise ? null : (
+            <ExercisePanel
+              exercise={currentExercise}
+              explanation={explanation}
+              feedback={feedback}
+              isLoadingExercise={isLoadingExercise && !learningPlan}
+              isLoadingExplanation={isLoadingExplanation}
+              isLoadingFeedback={isLoadingImprove || isLoadingSubmit}
+              onExplainConcept={handleExplainConcept}
+              learningMode={learningMode}
+              isExpanded={expandedPanel === 'exercise'}
+              onToggleExpand={() => handleTogglePanelExpand('exercise')}
+              className={expandedPanel === 'exercise' ? "md:col-span-2" : ""}
+            />
+          )}
+          {expandedPanel === 'exercise' && currentExercise ? null : (
+            <CodePanel
+              initialCode={currentExercise?.codeSnippet || userCode || (learningMode === 'challenge' && currentExercise ? `# Start coding for: ${currentExercise.topic}\n` : "print('Hello, CodeLeap!')" )}
+              onRunCode={handleRunCode}
+              onImproveCode={handleImproveCode}
+              onSubmitCode={handleSubmitCode}
+              isLoadingImprove={isLoadingImprove}
+              isLoadingSubmit={isLoadingSubmit}
+              showCodeEditor={true}
+              isExpanded={expandedPanel === 'code'}
+              onToggleExpand={() => handleTogglePanelExpand('code')}
+              className={expandedPanel === 'code' ? "md:col-span-2" : ""}
+            />
+          )}
         </div>
       </main>
     </div>
