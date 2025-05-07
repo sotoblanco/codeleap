@@ -36,17 +36,23 @@ const prompt = ai.definePrompt({
   prompt: `You are an AI coding exercise generator. Your goal is to create a Python exercise based on the provided topic, documentation, example code, and learning mode.
 
 Topic: {{{topic}}}
-Documentation: {{{documentation}}}
-Example Code: {{{exampleCode}}}
+Documentation:
+{{{documentation}}}
+Example Code:
+\`\`\`python
+{{{exampleCode}}}
+\`\`\`
 Learning Mode: {{{learningMode}}}
 
 Instructions:
-1. Formulate a clear question related to the topic.
+1. Formulate a clear question. Your question and exercise MUST be directly inspired by and test understanding of the provided \`Documentation\` and \`Example Code\`.
 2. If Learning Mode is 'hand-holding':
    - Provide a Python code snippet with clearly marked fill-in-the-blank sections (e.g., using \`____\` or \`# TODO\`). This snippet should be a good starting point for the user.
+   - The blanks should be in parts of the code that directly relate to key aspects of the \`Documentation\` or \`Example Code\`.
    - The 'codeSnippet' field in your output should contain this.
 3. If Learning Mode is 'challenge':
-   - The question should be more demanding, requiring the user to write significant Python code or solve a more complex problem from scratch based on the topic.
+   - The question should be more demanding, requiring the user to write significant Python code or solve a more complex problem from scratch.
+   - The problem should require applying concepts from the \`Documentation\` and potentially extending or modifying the \`Example Code\` logic.
    - The 'codeSnippet' field in your output MUST be an empty string. Do NOT provide any starter code.
 4. Provide the complete Python solution for the exercise.
 
@@ -72,8 +78,10 @@ const generateExerciseFlow = ai.defineFlow(
     }
     // Ensure codeSnippet is defined for hand-holding if model omitted it
     if (input.learningMode === 'hand-holding' && output.codeSnippet === undefined) {
-        output.codeSnippet = "# TODO: Write your code here, following the question.";
+        // Provide a more generic placeholder if AI fails to generate one for hand-holding
+        output.codeSnippet = `# Based on the topic: ${input.topic}\n# Refer to the documentation and example code provided.\n# TODO: Complete the Python code below.`;
     }
     return output;
   }
 );
+

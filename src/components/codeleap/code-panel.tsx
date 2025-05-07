@@ -4,36 +4,36 @@ import type { editor } from 'monaco-editor'; // Using type import
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Play, Wand2, CheckCircle, Eye, Code } from 'lucide-react';
+import { Play, Wand2, CheckCircle, Eye, Code, Terminal } from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from './loading-spinner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface CodePanelProps {
   initialCode: string;
-  onRunCode: (code: string) => void;
+  onRunCode: (code: string) => void; // This prop will still be called (e.g., for a toast)
   onImproveCode: (code: string) => Promise<void>;
   onSubmitCode: (code: string) => Promise<void>;
   isLoadingImprove: boolean;
   isLoadingSubmit: boolean;
-  showCodeEditor: boolean; // New prop
+  showCodeEditor: boolean;
 }
 
-// Basic placeholder for syntax highlighting. In a real app, use Monaco or CodeMirror.
+// Basic placeholder for syntax highlighting.
 const SyntaxHighlightedCode = ({ code }: { code: string }) => {
   const highlightKeywords = (line: string) => {
     const keywords = ['def', 'class', 'return', 'if', 'else', 'elif', 'for', 'while', 'import', 'from', 'print', 'True', 'False', 'None', 'async', 'await', 'try', 'except', 'finally', 'with', 'as', 'lambda', 'yield', 'pass', 'continue', 'break', 'global', 'nonlocal', 'assert', 'del', 'in', 'is', 'not', 'or', 'and'];
     const builtInFunctions = ['abs', 'all', 'any', 'ascii', 'bin', 'bool', 'breakpoint', 'bytearray', 'bytes', 'callable', 'chr', 'classmethod', 'compile', 'complex', 'delattr', 'dict', 'dir', 'divmod', 'enumerate', 'eval', 'exec', 'filter', 'float', 'format', 'frozenset', 'getattr', 'globals', 'hasattr', 'hash', 'help', 'hex', 'id', 'input', 'int', 'isinstance', 'issubclass', 'iter', 'len', 'list', 'locals', 'map', 'max', 'memoryview', 'min', 'next', 'object', 'oct', 'open', 'ord', 'pow', 'property', 'range', 'repr', 'reversed', 'round', 'set', 'setattr', 'slice', 'sorted', 'staticmethod', 'str', 'sum', 'super', 'tuple', 'type', 'vars', 'zip', '__import__'];
     
     const keywordRegex = new RegExp(`\\b(${keywords.join('|')})\\b`, 'g');
-    const builtInRegex = new RegExp(`\\b(${builtInFunctions.join('|')})(?=\\()`, 'g'); // Lookahead for (
+    const builtInRegex = new RegExp(`\\b(${builtInFunctions.join('|')})(?=\\()`, 'g');
     
     return line
-      .replace(keywordRegex, '<span class="text-sky-400 font-semibold">$1</span>') // Keywords
-      .replace(builtInRegex, '<span class="text-purple-400">$1</span>') // Built-in functions
-      .replace(/(\"[^\"\\]*(?:\\.[^\"\\]*)*\"|\'[^\'\\]*(?:\\.[^\'\\]*)*\')/g, '<span class="text-green-400">$1</span>') // Strings (improved)
-      .replace(/(#.*)/g, '<span class="text-slate-500 italic">$1</span>') // Comments
-      .replace(/\b(\d+\.?\d*)\b/g, '<span class="text-yellow-400">$1</span>'); // Numbers
+      .replace(keywordRegex, '<span class="text-sky-400 font-semibold">$1</span>')
+      .replace(builtInRegex, '<span class="text-purple-400">$1</span>') 
+      .replace(/(\"[^\"\\]*(?:\\.[^\"\\]*)*\"|\'[^\'\\]*(?:\\.[^\'\\]*)*\')/g, '<span class="text-green-400">$1</span>')
+      .replace(/(#.*)/g, '<span class="text-slate-500 italic">$1</span>') 
+      .replace(/\b(\d+\.?\d*)\b/g, '<span class="text-yellow-400">$1</span>');
   };
 
   return (
@@ -57,15 +57,52 @@ export function CodePanel({
 }: CodePanelProps) {
   const [code, setCode] = useState(initialCode);
   const [showSyntaxHighlighted, setShowSyntaxHighlighted] = useState(false);
+  const [consoleOutput, setConsoleOutput] = useState<string | null>(null); // For simulated output
   const editorRef = useRef<HTMLTextAreaElement>(null);
-
 
   useEffect(() => {
     setCode(initialCode);
-    // If editor is not shown (e.g. challenge mode initially), default to preview if there's code.
-    // If editor IS shown, default to edit mode.
+    setConsoleOutput(null); // Reset console on new exercise/code
     setShowSyntaxHighlighted(showCodeEditor ? false : !!initialCode);
   }, [initialCode, showCodeEditor]);
+
+  const simulatePrintStatements = (currentCode: string): string => {
+    const MAX_ITERATIONS = 100;
+    let iterations = 0;
+    const printRegex = /print\s*\(\s*(?:f(["'])(.*?)\1|(["'])(.*?)\3|([^)]+?))\s*\)/g;
+    let match;
+    const outputs: string[] = [];
+
+    while ((match = printRegex.exec(currentCode)) !== null && iterations < MAX_ITERATIONS) {
+      iterations++;
+      const fStringContent = match[2];
+      const regularStringContent = match[4];
+      const expressionContent = match[5];
+
+      if (fStringContent !== undefined) {
+        outputs.push(`f"${fStringContent}"`); 
+      } else if (regularStringContent !== undefined) {
+        outputs.push(regularStringContent);
+      } else if (expressionContent !== undefined) {
+        outputs.push(`[Output for: ${expressionContent.trim()}]`);
+      }
+    }
+
+    if (iterations >= MAX_ITERATIONS) {
+        outputs.push("[Simulation limit reached due to too many print statements or complex regex processing]");
+    }
+
+    if (outputs.length === 0) {
+      return "No print() statements found or code did not produce direct output via print(). (Simulated)";
+    }
+    return outputs.join('\n');
+  };
+
+  const handleInternalRunCode = () => {
+    const output = simulatePrintStatements(code);
+    setConsoleOutput(output);
+    onRunCode(code); // Call the prop, which might show a toast or log
+  };
 
   const handleImproveCode = async () => {
     await onImproveCode(code);
@@ -75,17 +112,14 @@ export function CodePanel({
     await onSubmitCode(code);
   };
 
-  // Determine if the editor should be visible based on showCodeEditor and preview state
   const editorVisible = showCodeEditor && !showSyntaxHighlighted;
-  // Determine if the preview should be visible
   const previewVisible = showSyntaxHighlighted || !showCodeEditor;
-
 
   return (
     <Card className="h-full flex flex-col bg-primary text-primary-foreground shadow-2xl rounded-lg">
       <CardHeader className="flex flex-row justify-between items-center">
         <CardTitle className="text-xl font-semibold text-primary-foreground">Python Editor</CardTitle>
-         {showCodeEditor && ( // Only show toggle if editor itself is meant to be available
+         {showCodeEditor && (
             <Button 
               variant="ghost" 
               size="sm" 
@@ -99,34 +133,53 @@ export function CodePanel({
           )}
       </CardHeader>
       <CardContent className="flex-grow flex flex-col p-0 relative">
-        {editorVisible ? (
-          <Textarea
-            ref={editorRef}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="Write your Python code here..."
-            className="flex-grow w-full h-full p-4 bg-gray-800 text-gray-100 border-0 rounded-none resize-none focus:ring-0 focus:border-accent font-mono text-sm leading-relaxed"
-            spellCheck="false"
-            aria-label="Python code editor"
-          />
-        ) : previewVisible && code.trim() ? (
-          <ScrollArea className="h-full flex-grow p-4">
-             <SyntaxHighlightedCode code={code} />
-          </ScrollArea>
-        ) : (
-           <div className="flex-grow flex items-center justify-center p-4">
-            <p className="text-muted-foreground text-center">
-              {showCodeEditor 
-                ? "Start typing your Python code or switch to Preview if code is already present." 
-                : "Code preview is shown here. Switch to 'Hand-holding' mode or an exercise with a snippet to edit code."}
-            </p>
+        {/* Editor/Preview Area */}
+        <div className="flex-grow p-0 relative min-h-0">
+          {editorVisible ? (
+            <Textarea
+              ref={editorRef}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="Write your Python code here..."
+              className="absolute inset-0 w-full h-full p-4 bg-gray-800 text-gray-100 border-0 rounded-none resize-none focus:ring-0 focus:border-accent font-mono text-sm leading-relaxed"
+              spellCheck="false"
+              aria-label="Python code editor"
+            />
+          ) : previewVisible && code.trim() ? (
+            <ScrollArea className="absolute inset-0">
+              {/* SyntaxHighlightedCode already has p-4 and bg */}
+              <SyntaxHighlightedCode code={code} />
+            </ScrollArea>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center p-4">
+              <p className="text-muted-foreground text-center">
+                {showCodeEditor 
+                  ? "Start typing Python code or switch to Preview." 
+                  : "Code preview is shown here. Switch to 'Hand-holding' mode or select an exercise with a snippet to edit."}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Console Output Area */}
+        {consoleOutput !== null && (
+          <div className="p-4 border-t border-primary-foreground/20">
+            <h4 className="mb-2 text-sm font-semibold text-primary-foreground/80 flex items-center">
+              <Terminal className="mr-2 h-4 w-4" />
+              Console Output <span className="ml-1 text-xs font-normal text-primary-foreground/60">(Simulated)</span>
+            </h4>
+            <ScrollArea className="max-h-32">
+              <pre className="text-xs bg-gray-800 text-gray-100 p-2 rounded-md whitespace-pre-wrap break-all font-mono">
+                {consoleOutput}
+              </pre>
+            </ScrollArea>
           </div>
         )}
       </CardContent>
       <CardFooter className="p-4 flex flex-col sm:flex-row justify-between items-center gap-2 border-t border-primary-foreground/20">
         <div className="flex gap-2">
           <Button
-            onClick={() => onRunCode(code)}
+            onClick={handleInternalRunCode}
             variant="secondary"
             className="bg-accent hover:bg-accent/90 text-accent-foreground"
             aria-label="Run code"

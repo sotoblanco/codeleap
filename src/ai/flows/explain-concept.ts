@@ -19,9 +19,9 @@ const ExplainConceptInputSchema = z.object({
 export type ExplainConceptInput = z.infer<typeof ExplainConceptInputSchema>;
 
 const ExplainConceptOutputSchema = z.object({
-  explanation: z.string().describe('A simplified explanation of the coding concept.'),
-  breakdown: z.string().describe('A breakdown of the concept into smaller, more digestible parts.'),
-  application: z.string().describe('An explanation of how the concept applies to the provided documentation and example code.'),
+  explanation: z.string().describe('A simplified, easy-to-understand explanation of the coding concept. Use analogies if helpful. Markdown formatting (like bullet points) can be used.'),
+  breakdown: z.string().describe('A breakdown of the concept into smaller, more digestible parts. Markdown formatting can be used.'),
+  application: z.string().describe('An explanation of how the concept applies to the provided documentation and example code. Be specific. Markdown formatting can be used.'),
 });
 export type ExplainConceptOutput = z.infer<typeof ExplainConceptOutputSchema>;
 
@@ -33,28 +33,23 @@ const prompt = ai.definePrompt({
   name: 'explainConceptPrompt',
   input: {schema: ExplainConceptInputSchema},
   output: {schema: ExplainConceptOutputSchema},
-  prompt: `You are an expert coding teacher, skilled at explaining complex concepts in simple terms.
+  prompt: `You are an expert coding teacher, renowned for making complex topics easy to understand using simple language, analogies, and clear examples.
 
-  Your task is to explain the coding concept provided, break it down into smaller parts, and explain how it applies to the given documentation and example code.
+Your task is to:
+1.  Provide a very simple, **easy-to-understand explanation** of the concept: \`{{{concept}}}\`. Use analogies if they make it clearer.
+2.  Break down the \`{{{concept}}}\` into smaller, digestible parts.
+3.  Clearly explain how this \`{{{concept}}}\` is applied or demonstrated in the provided documentation and example code. Be specific.
 
-  Concept: {{{concept}}}
-  Documentation: {{{documentation}}}
-  Example Code: {{{exampleCode}}}
+Concept: {{{concept}}}
+Documentation:
+{{{documentation}}}
+Example Code:
+\`\`\`python
+{{{exampleCode}}}
+\`\`\`
 
-  Explanation:
-  {{#each (split explanation)}}
-  - {{{this}}}
-  {{/each}}
-
-  Breakdown:
-  {{#each (split breakdown)}}
-  - {{{this}}}
-  {{/each}}
-
-  Application:
-  {{#each (split application)}}
-  - {{{this}}}
-  {{/each}}
+Make sure your output is structured according to the requested JSON schema fields: 'explanation', 'breakdown', and 'application'.
+For 'explanation', 'breakdown', and 'application', provide clear, well-formatted text. You can use Markdown formatting like bullet points (\`- item\`) or numbered lists (\`1. item\`) within these string fields if it enhances readability.
 `,
 });
 

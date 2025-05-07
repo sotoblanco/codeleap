@@ -7,8 +7,31 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lightbulb, BookOpen, MessageSquare, Zap } from 'lucide-react';
 import type { Exercise, Explanation, Feedback } from '@/app/codeleap/page-client';
 import { LoadingSpinner } from './loading-spinner';
+import { Button } from '@/components/ui/button'; // Added Button import
 
-type LearningMode = 'hand-holding' | 'challenge';
+// Basic Markdown-to-HTML renderer (very simplified)
+// In a real app, consider a library like 'marked' or 'react-markdown'
+const SimpleMarkdown = ({ content }: { content: string }) => {
+  const renderLists = (text: string) => {
+    // Basic unordered list
+    text = text.replace(/^\s*-\s+(.+)/gm, '<li>$1</li>');
+    text = text.replace(/(<li>.+<\/li>)+/g, '<ul>$&</ul>');
+    // Basic ordered list
+    text = text.replace(/^\s*\d+\.\s+(.+)/gm, '<li>$1</li>');
+    text = text.replace(/(<li>.+<\/li>)+/g, (match, p1, offset, string) => {
+      // Only wrap if it's not already in a ul (to avoid double wrapping from previous regex)
+      const preText = string.substring(Math.max(0, offset - 4), offset);
+      if (preText !== '<ul>'){
+        return '<ol>$&</ol>';
+      }
+      return match;
+    });
+    return text.replace(/\n/g, '<br />');
+  };
+
+  return <div dangerouslySetInnerHTML={{ __html: renderLists(content) }} />;
+};
+
 
 interface ExercisePanelProps {
   exercise: Exercise | null;
@@ -44,7 +67,7 @@ export function ExercisePanel({
             : 'Read the instructions and complete the code.'}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow p-0">
+      <CardContent className="flex-grow p-0 min-h-0"> {/* Added min-h-0 here */}
         <Tabs defaultValue="question" className="h-full flex flex-col">
           <TabsList className="grid w-full grid-cols-3 mx-auto sticky top-0 bg-muted/50 p-1 rounded-none border-b">
             <TabsTrigger value="question" className="data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">
@@ -85,13 +108,15 @@ export function ExercisePanel({
                        <AlertTitle>Topic: {exercise.topic}</AlertTitle>
                        <AlertDescription>
                          Focus on concepts related to {exercise.topic.toLowerCase()} to solve this.
-                         {exercise.documentation && <div className="mt-2 text-xs"><strong className="font-semibold">Hint:</strong> {exercise.documentation.substring(0,150)}{exercise.documentation.length > 150 ? "..." : ""}</div>}
+                         {exercise.documentation && <div className="mt-2 text-xs prose prose-xs max-w-none dark:prose-invert"><strong className="font-semibold">Hint:</strong> <SimpleMarkdown content={exercise.documentation.substring(0,250) + (exercise.documentation.length > 250 ? "..." : "")}/></div>}
                        </AlertDescription>
                      </Alert>
                   )}
                 </div>
               ) : (
-                <p className="text-muted-foreground">No exercise loaded. Generate a learning plan or click "New Exercise" (if available) to start.</p>
+                 <div className="text-center py-8">
+                    <p className="text-muted-foreground">No exercise loaded yet. <br/> If you pasted content, try generating a learning plan. Otherwise, a default exercise will load shortly.</p>
+                 </div>
               )}
             </TabsContent>
 
@@ -102,24 +127,32 @@ export function ExercisePanel({
                 </div>
               ) : explanation ? (
                 <div className="space-y-4 prose prose-sm max-w-none dark:prose-invert">
-                  <h4 className="font-semibold">Simplified Explanation:</h4>
-                  <p>{explanation.explanation}</p>
-                  <h4 className="font-semibold">Breakdown:</h4>
-                  <p>{explanation.breakdown}</p>
-                  <h4 className="font-semibold">Application:</h4>
-                  <p>{explanation.application}</p>
+                  <div>
+                    <h4 className="font-semibold mb-1">Simplified Explanation:</h4>
+                    <SimpleMarkdown content={explanation.explanation} />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-1 mt-3">Breakdown:</h4>
+                    <SimpleMarkdown content={explanation.breakdown} />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-1 mt-3">Application to Example:</h4>
+                    <SimpleMarkdown content={explanation.application} />
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">Click below to get an explanation for the current topic.</p>
-                   <button 
+                  <p className="text-muted-foreground mb-4">
+                    {exercise ? "Click below to get an explanation for the current topic." : "Load an exercise first to get an explanation."}
+                  </p>
+                   <Button 
                     onClick={onExplainConcept}
                     disabled={isLoadingExplanation || !exercise}
-                    className="px-4 py-2 bg-accent text-accent-foreground rounded-md hover:bg-accent/90 disabled:opacity-50 flex items-center mx-auto"
+                    className="bg-accent text-accent-foreground hover:bg-accent/90 disabled:opacity-50 flex items-center mx-auto"
                   >
                     {isLoadingExplanation && <LoadingSpinner size={16} className="mr-2" />}
                     Explain Concepts
-                  </button>
+                  </Button>
                 </div>
               )}
             </TabsContent>
@@ -139,13 +172,16 @@ export function ExercisePanel({
                     {feedback.suggestions && (
                       <>
                         <h5 className="font-semibold mt-2">Suggestions:</h5>
-                        <div dangerouslySetInnerHTML={{ __html: feedback.suggestions.replace(/\n/g, '<br />') }} />
+                        {/* Render suggestions as Markdown if they might contain it */}
+                        <SimpleMarkdown content={feedback.suggestions} />
                       </>
                     )}
                   </AlertDescription>
                 </Alert>
               ) : (
-                <p className="text-muted-foreground">Submit your code to get feedback.</p>
+                 <div className="text-center py-8">
+                    <p className="text-muted-foreground">Submit your code to get feedback, or click "Improve" for suggestions.</p>
+                 </div>
               )}
             </TabsContent>
           </ScrollArea>

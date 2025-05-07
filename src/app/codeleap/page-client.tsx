@@ -99,7 +99,7 @@ export function CodeLeapPageClient() {
         documentation: exerciseInput.documentation,
         exampleCode: exerciseInput.exampleCode,
       });
-      setUserCode(aiExercise.codeSnippet || (mode === 'challenge' ? `# Start coding for: ${step.topic}\n` : ""));
+      setUserCode(aiExercise.codeSnippet || (mode === 'challenge' ? `# Start coding for: ${step.topic}\n# Documentation: ${exerciseInput.documentation.substring(0,100)}...\n# Example: ${exerciseInput.exampleCode.substring(0,100)}...\n` : ""));
       setCurrentPlanStepIndex(stepIndex);
     } catch (error) {
       toast({
@@ -144,7 +144,6 @@ export function CodeLeapPageClient() {
     }
   };
 
-  // Fetch default exercise if no plan exists initially
   const fetchDefaultExercise = useCallback(async () => {
     setIsLoadingExercise(true);
     setFeedback(null);
@@ -154,7 +153,7 @@ export function CodeLeapPageClient() {
         topic: DEFAULT_TOPIC,
         documentation: DEFAULT_DOCUMENTATION,
         exampleCode: DEFAULT_EXAMPLE_CODE,
-        learningMode: learningMode, // Use current mode
+        learningMode: learningMode,
       });
       setCurrentExercise({
         ...aiExercise,
@@ -180,21 +179,22 @@ export function CodeLeapPageClient() {
     }
   }, [fetchDefaultExercise, learningPlan]);
   
-  // Refetch exercise if learning mode changes and there's a current step/plan
   useEffect(() => {
     if (learningPlan && currentPlanStepIndex !== null) {
       fetchExerciseForStep(currentPlanStepIndex, learningPlan, learningMode);
-    } else if (!learningPlan) { // Or fetch default if no plan
+    } else if (!learningPlan) { 
         fetchDefaultExercise();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [learningMode]); // Only re-run when learningMode changes
+  }, [learningMode]); 
 
   const handleRunCode = (code: string) => {
-    console.log('Running code:', code);
+    // The primary simulation logic is now in CodePanel.tsx.
+    // This can be used for additional logging or a generic toast if needed.
+    console.log('Code submitted for simulation:', code);
     toast({
-      title: 'Code "Run"',
-      description: 'Code execution simulation. Output would appear in a console.',
+      title: 'Code "Run" Requested',
+      description: 'Simulated output will appear in the console area below the editor.',
     });
   };
 
@@ -241,17 +241,20 @@ export function CodeLeapPageClient() {
       });
 
       const normalize = (s: string) => s.replace(/\s+/g, '').trim();
+      // For a more robust check, consider running the code in a safe environment
+      // and comparing output, or using an AST parser for structural comparison.
+      // For now, a normalized string comparison is a basic check.
       const isCorrect = normalize(code) === normalize(currentExercise.solution);
 
       setFeedback({
-        message: isCorrect ? 'Your solution seems correct!' : 'Your solution might have some issues or could be improved.',
+        message: isCorrect ? 'Your solution seems correct!' : 'Your solution might have some issues or could be improved. See suggestions.',
         suggestions: improvementSuggestions.improvements,
         isCorrect,
       });
       toast({
         title: isCorrect ? 'Submission Correct!' : 'Submission Feedback',
         description: 'Check the feedback panel.',
-        variant: isCorrect ? 'default' : 'default',
+        variant: isCorrect ? 'default' : 'default', // Could use a success variant for 'default'
       });
     } catch (error) {
       toast({
@@ -325,7 +328,7 @@ export function CodeLeapPageClient() {
               className="bg-background border-border focus:ring-accent"
             />
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <RadioGroup defaultValue="hand-holding" onValueChange={(value: LearningMode) => setLearningMode(value)} className="flex gap-4 items-center">
+                <RadioGroup value={learningMode} onValueChange={(value: LearningMode) => setLearningMode(value)} className="flex gap-4 items-center">
                     <div className="flex items-center space-x-2">
                         <RadioGroupItem value="hand-holding" id="r1" />
                         <Label htmlFor="r1" className="flex items-center gap-1"><BookHeart className="h-4 w-4 text-blue-500"/> Hand-holding Mode</Label>
@@ -361,18 +364,18 @@ export function CodeLeapPageClient() {
                         Step {index + 1}: {step.topic}
                         {isLoadingExercise && currentPlanStepIndex === index && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
                     </AccordionTrigger>
-                    <AccordionContent className="prose prose-sm max-w-none">
+                    <AccordionContent className="prose prose-sm max-w-none dark:prose-invert">
                       <p>{step.description}</p>
                       {step.extractedDocumentation && (
                         <>
-                          <h5 className="font-semibold">Key Documentation:</h5>
-                          <blockquote className="border-l-4 pl-4 italic text-muted-foreground">{step.extractedDocumentation}</blockquote>
+                          <h5 className="font-semibold mt-2">Key Documentation:</h5>
+                          <blockquote className="border-l-4 pl-4 italic text-muted-foreground my-2">{step.extractedDocumentation}</blockquote>
                         </>
                       )}
                        {step.extractedExampleCode && (
                         <>
-                          <h5 className="font-semibold">Example Code:</h5>
-                          <pre className="bg-muted p-2 rounded-md overflow-x-auto"><code>{step.extractedExampleCode}</code></pre>
+                          <h5 className="font-semibold mt-2">Example Code:</h5>
+                          <pre className="bg-muted p-2 rounded-md overflow-x-auto my-2"><code>{step.extractedExampleCode}</code></pre>
                         </>
                       )}
                     </AccordionContent>
@@ -392,14 +395,14 @@ export function CodeLeapPageClient() {
             exercise={currentExercise}
             explanation={explanation}
             feedback={feedback}
-            isLoadingExercise={isLoadingExercise && !learningPlan}
+            isLoadingExercise={isLoadingExercise && !learningPlan} // Show default loading only when no plan yet
             isLoadingExplanation={isLoadingExplanation}
             isLoadingFeedback={isLoadingImprove || isLoadingSubmit}
             onExplainConcept={handleExplainConcept}
             learningMode={learningMode}
           />
           <CodePanel
-            initialCode={currentExercise?.codeSnippet || userCode || "print('Hello, CodeLeap!')"}
+            initialCode={currentExercise?.codeSnippet || userCode || (learningMode === 'challenge' && currentExercise ? `# Start coding for: ${currentExercise.topic}\n` : "print('Hello, CodeLeap!')" )}
             onRunCode={handleRunCode}
             onImproveCode={handleImproveCode}
             onSubmitCode={handleSubmitCode}
