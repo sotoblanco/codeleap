@@ -1,3 +1,5 @@
-export default function Home() {
-  return <></>;
+import { CodeLeapPageClient } from './codeleap/page-client';
+
+export default function CodeLeapPage() {
+  return <CodeLeapPageClient />;
 }
