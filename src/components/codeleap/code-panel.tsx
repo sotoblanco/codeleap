@@ -27,13 +27,29 @@ const SyntaxHighlightedCode = ({ code }: { code: string }) => {
     
     const keywordRegex = new RegExp(`\\b(${keywords.join('|')})\\b`, 'g');
     const builtInRegex = new RegExp(`\\b(${builtInFunctions.join('|')})(?=\\()`, 'g');
-    
-    return line
+    const stringRegex = /(\"[^\"\\]*(?:\\.[^\"\\]*)*\"|\'[^\'\\]*(?:\\.[^\'\\]*)*\')/g;
+    const numberRegex = /\b(\d+\.?\d*)\b/g;
+    const commentRegex = /(#.*)/;
+
+    const commentMatch = line.match(commentRegex);
+    let codePart = line;
+    let commentPart = '';
+
+    if (commentMatch) {
+      codePart = line.substring(0, commentMatch.index);
+      commentPart = commentMatch[0];
+    }
+
+    let highlightedCodePart = codePart
       .replace(keywordRegex, '<span class="text-sky-400 font-semibold">$1</span>')
-      .replace(builtInRegex, '<span class="text-purple-400">$1</span>') 
-      .replace(/(\"[^\"\\]*(?:\\.[^\"\\]*)*\"|\'[^\'\\]*(?:\\.[^\'\\]*)*\')/g, '<span class="text-green-400">$1</span>')
-      .replace(/(#.*)/g, '<span class="text-slate-500 italic">$1</span>') 
-      .replace(/\b(\d+\.?\d*)\b/g, '<span class="text-yellow-400">$1</span>');
+      .replace(builtInRegex, '<span class="text-purple-400">$1</span>')
+      .replace(stringRegex, '<span class="text-green-400">$1</span>')
+      .replace(numberRegex, '<span class="text-yellow-400">$1</span>');
+    
+    if (commentPart) {
+      return highlightedCodePart + `<span class="text-slate-500 italic">${commentPart}</span>`;
+    }
+    return highlightedCodePart;
   };
 
   return (
