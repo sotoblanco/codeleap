@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,29 +8,43 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lightbulb, BookOpen, MessageSquare, Zap } from 'lucide-react';
 import type { Exercise, Explanation, Feedback } from '@/app/codeleap/page-client';
 import { LoadingSpinner } from './loading-spinner';
-import { Button } from '@/components/ui/button'; // Added Button import
+import { Button } from '@/components/ui/button'; 
+import type { LearningMode } from '@/app/codeleap/page-client';
 
-// Basic Markdown-to-HTML renderer (very simplified)
-// In a real app, consider a library like 'marked' or 'react-markdown'
+
 const SimpleMarkdown = ({ content }: { content: string }) => {
-  const renderLists = (text: string) => {
-    // Basic unordered list
-    text = text.replace(/^\s*-\s+(.+)/gm, '<li>$1</li>');
-    text = text.replace(/(<li>.+<\/li>)+/g, '<ul>$&</ul>');
-    // Basic ordered list
-    text = text.replace(/^\s*\d+\.\s+(.+)/gm, '<li>$1</li>');
-    text = text.replace(/(<li>.+<\/li>)+/g, (match, p1, offset, string) => {
-      // Only wrap if it's not already in a ul (to avoid double wrapping from previous regex)
-      const preText = string.substring(Math.max(0, offset - 4), offset);
-      if (preText !== '<ul>'){
-        return '<ol>$&</ol>';
-      }
-      return match;
-    });
-    return text.replace(/\n/g, '<br />');
-  };
+  // Clean up standalone "$&" tokens. \b ensures it's a "word" boundary.
+  let text = content.replace(/\b\$&\b/g, '').trim();
 
-  return <div dangerouslySetInnerHTML={{ __html: renderLists(content) }} />;
+  // Process unordered lists (lines starting with '-' or '*')
+  // Converts them to <li> items, then wraps blocks of <li> into <ul>
+  text = text.replace(/^\s*[-*]\s+(.+)/gm, '<li>$1</li>');
+  text = text.replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, (match) => {
+    if (match.trim().startsWith('<ul>') || match.trim().startsWith('<ol>')) {
+      return match; // Avoid re-wrapping
+    }
+    return `<ul>${match.trim()}</ul>`;
+  });
+
+  // Process ordered lists (lines starting with '1.', '2.', etc.)
+  // Converts them to <li> items, then wraps blocks of <li> into <ol>
+  // (if not already part of a <ul>)
+  text = text.replace(/^\s*\d+\.\s+(.+)/gm, '<li>$1</li>');
+  text = text.replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, (match, _p1, offset, string) => {
+    const precedingContext = string.substring(Math.max(0, offset - 15), offset);
+    // If it looks like it's inside a <ul> or already wrapped, don't wrap in <ol>
+    if (precedingContext.match(/<ul>\s*$/si) || match.trim().startsWith('<ul>') || match.trim().startsWith('<ol>')) {
+      return match;
+    }
+    return `<ol>${match.trim()}</ol>`;
+  });
+
+  // Convert newlines to <br />
+  // This should be done carefully to avoid <br/> inside list structures if not desired.
+  // For simplicity here, it's a global replacement.
+  text = text.replace(/\n/g, '<br />');
+
+  return <div dangerouslySetInnerHTML={{ __html: text }} />;
 };
 
 
@@ -190,3 +205,4 @@ export function ExercisePanel({
     </Card>
   );
 }
+
