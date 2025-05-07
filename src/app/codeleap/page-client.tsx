@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -42,7 +43,7 @@ type LearningMode = 'hand-holding' | 'challenge';
 
 const DEFAULT_TOPIC = "Basic Python Output and Variables";
 const DEFAULT_DOCUMENTATION = "Python basics include variables for storing data (e.g., name = \"Alice\"), the print() function for displaying output (e.g., print(\"Hello\")), and f-strings for formatted output (e.g., print(f\"Hello, {name}\")). Arithmetic operations like addition (+), subtraction (-), multiplication (*), and division (/) are also fundamental.";
-const DEFAULT_EXAMPLE_CODE = 
+const DEFAULT_EXAMPLE_CODE =
 `name = "World"
 print(f"Hello, {name}!")
 x = 10
@@ -58,7 +59,7 @@ export function CodeLeapPageClient() {
   const [learningContent, setLearningContent] = useState('');
   const [learningPlan, setLearningPlan] = useState<GenerateLearningPlanOutput | null>(null);
   const [currentPlanStepIndex, setCurrentPlanStepIndex] = useState<number | null>(null);
-  
+
   const [currentExercise, setCurrentExercise] = useState<Exercise | null>(null);
   const [userCode, setUserCode] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -178,15 +179,15 @@ export function CodeLeapPageClient() {
       fetchDefaultExercise();
     }
   }, [fetchDefaultExercise, learningPlan]);
-  
+
   useEffect(() => {
     if (learningPlan && currentPlanStepIndex !== null) {
       fetchExerciseForStep(currentPlanStepIndex, learningPlan, learningMode);
-    } else if (!learningPlan) { 
+    } else if (!learningPlan) {
         fetchDefaultExercise();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [learningMode]); 
+  }, [learningMode]);
 
   const handleRunCode = (code: string) => {
     // The primary simulation logic is now in CodePanel.tsx.
@@ -308,7 +309,7 @@ export function CodeLeapPageClient() {
       toast({ title: "Start of Plan", description: "You are at the first step."});
     }
   };
-  
+
   const currentLearningStep = learningPlan && currentPlanStepIndex !== null ? learningPlan.learningSteps[currentPlanStepIndex] : null;
 
   return (
@@ -356,7 +357,7 @@ export function CodeLeapPageClient() {
               <Accordion type="single" collapsible className="w-full" value={currentPlanStepIndex !== null ? `item-${currentPlanStepIndex}` : undefined}>
                 {learningPlan.learningSteps.map((step, index) => (
                   <AccordionItem value={`item-${index}`} key={index}>
-                    <AccordionTrigger 
+                    <AccordionTrigger
                         onClick={() => fetchExerciseForStep(index, learningPlan, learningMode)}
                         disabled={isLoadingExercise && currentPlanStepIndex === index}
                         className={currentPlanStepIndex === index ? "text-accent" : ""}
@@ -408,7 +409,7 @@ export function CodeLeapPageClient() {
             onSubmitCode={handleSubmitCode}
             isLoadingImprove={isLoadingImprove}
             isLoadingSubmit={isLoadingSubmit}
-            showCodeEditor={learningMode === 'hand-holding' || (currentExercise?.codeSnippet !== undefined && currentExercise?.codeSnippet !== "")}
+            showCodeEditor={true}
           />
         </div>
       </main>
