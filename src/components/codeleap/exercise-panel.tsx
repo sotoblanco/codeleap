@@ -6,99 +6,95 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lightbulb, BookOpen, MessageSquare, Zap, Maximize2, Minimize2 } from 'lucide-react';
-import type { Exercise, Explanation, Feedback } from '@/app/codeleap/page-client';
+import type { Exercise, Explanation, Feedback, LearningMode } from './types';
 import { LoadingSpinner } from './loading-spinner';
 import { Button } from '@/components/ui/button';
-import type { LearningMode } from '@/app/codeleap/page-client';
 import { cn } from '@/lib/utils';
 
 
 const SimpleMarkdown = ({ content }: { content: string }) => {
-  let html = content.replace(/\b\$&\b/g, '').trim(); // Remove problematic sequence if present
+  // Sanitize potentially problematic sequences like '$&' which can have special meaning in regex replacement
+  let html = content.replace(/\$&/g, '&#36;&amp;').trim();
 
   // Code blocks (```python ... ``` or ``` ... ```)
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
     const languageClass = lang ? `language-${lang}` : '';
-    return `<pre class="bg-muted p-2 rounded-md overflow-x-auto my-2"><code class="${languageClass}">${code.replace(/</g, '&lt;').replace(/>/g, '&gt;').trim()}</code></pre>`;
+    // Escape HTML characters inside code blocks
+    const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `<pre class="bg-muted p-2 rounded-md overflow-x-auto my-2"><code class="${languageClass}">${escapedCode.trim()}</code></pre>`;
   });
   
   // Inline code (`code`)
-  html = html.replace(/`([^`]+)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-sm font-mono">$1</code>');
+  html = html.replace(/`([^`]+?)`/g, (match, code) => {
+    const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `<code class="bg-muted px-1 py-0.5 rounded text-sm font-mono">${escapedCode}</code>`;
+  });
 
   // Bold (**text** or __text__)
-  html = html.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  html = html.replace(/\*\*([^\*]+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([^_]+?)__/g, '<strong>$1</strong>');
 
   // Italic (*text* or _text_)
-  // Ensure it doesn't conflict with list markers by checking for space before/after or start/end of line for standalone italics
-  html = html.replace(/(^|\s)\*([^\*\s][^\*]*?)\*(\s|$)/g, '$1<em>$2</em>$3');
-  html = html.replace(/(^|\s)_([^\_\s][^_]*?)_(\s|$)/g, '$1<em>$2</em>$3');
+  html = html.replace(/(?<!\*)\*([^\*]+?)\*(?!\*)/g, '<em>$1</em>'); // Avoid ** turning into *<em>
+  html = html.replace(/(?<!_)_([^_]+?)_(?!_)/g, '<em>$1</em>');   // Avoid __ turning into _<em>
 
+  // Links [text](url)
+  html = html.replace(/\[([^\]]+?)\]\(([^)]+?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">$1</a>');
 
-  // Unordered lists (*, -, +) - basic handling
-  html = html.replace(/^\s*([*-+])\s+(.+)/gm, (match, marker, item) => `<li>${item.trim()}</li>`);
-  // Wrap consecutive <li> items in <ul>
-  html = html.replace(/(<li>.*?<\/li>\s*)+/gs, (match) => {
-    // check if already wrapped
-    if (match.startsWith('<ul>') || match.startsWith('<ol>')) return match;
-    return `<ul>${match.trim()}</ul>`;
-  });
+  // Split into lines to process lists and paragraphs
+  const lines = html.split('\n');
+  let inList = false;
+  let listType: 'ul' | 'ol' | null = null;
+  const processedLines: string[] = [];
 
+  for (const line of lines) {
+    let processedLine = line;
+    const ulMatch = line.match(/^(\s*)([*-+])\s+(.*)/);
+    const olMatch = line.match(/^(\s*)(\d+)\.\s+(.*)/);
 
-  // Ordered lists (1., 2.) - basic handling
-  html = html.replace(/^\s*(\d+)\.\s+(.+)/gm, (match, number, item) => `<li>${item.trim()}</li>`);
-  // Wrap consecutive <li> items in <ol>
-  html = html.replace(/(<li>.*?<\/li>\s*)+/gs, (match) => {
-     // check if already wrapped or part of ul
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = match;
-    const firstChild = tempDiv.firstChild as HTMLElement;
-
-    if (match.startsWith('<ol>') || match.startsWith('<ul>')) return match;
-    if (firstChild && firstChild.tagName === 'LI' && !isNaN(parseInt(firstChild.textContent || '',10))) {
-         // Check if it looks like an ordered list item start
-        const firstLiContent = firstChild.innerHTML;
-        if(/^\d+\./.test(firstLiContent.trim())) return `<ol>${match.trim()}</ol>`; // Heuristic: if it starts like "1. item" then it's OL
+    if (ulMatch) {
+      if (!inList || listType !== 'ul') {
+        if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>'); // Close previous list
+        processedLines.push('<ul>');
+        inList = true;
+        listType = 'ul';
+      }
+      processedLine = `<li>${ulMatch[3]}</li>`;
+    } else if (olMatch) {
+      if (!inList || listType !== 'ol') {
+        if (inList) processedLines.push(listType === 'ul' ? '</ul>' : '</ol>'); // Close previous list
+        processedLines.push('<ol>');
+        inList = true;
+        listType = 'ol';
+      }
+      processedLine = `<li>${olMatch[3]}</li>`;
+    } else {
+      if (inList) {
+        processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+        inList = false;
+        listType = null;
+      }
+      // Wrap non-list, non-block lines in <p> tags if they are not empty
+      // and don't already look like an HTML tag
+      if (processedLine.trim() !== '' && !processedLine.trim().startsWith('<')) {
+        processedLine = `<p>${processedLine}</p>`;
+      }
     }
+    processedLines.push(processedLine);
+  }
 
-    // If it was matched by UL regex first, it will be wrapped by UL. This attempts to re-classify if it's actually an OL.
-    // This is a bit tricky with simple regex. A more robust parser would be better.
-    // For now, this logic assumes if it wasn't caught by UL's more specific start markers, and it has numbers, it might be OL.
-    // This is a simplification and might misclassify.
-    // The previous regex for OL tries to handle it, but wrapping is tricky.
-    
-    // Attempt to differentiate: if the first li's content starts with a number.
-    const firstLiText = match.match(/<li>(.*?)<\/li>/);
-    if (firstLiText && /^\s*\d+\s*/.test(firstLiText[1])) {
-         if (match.startsWith('<ul>')) return match; // if already UL, respect it
-         return `<ol>${match.trim()}</ol>`;
-    }
-    // Default to UL if not clearly OL from previous regex
-    if (match.startsWith('<ul>')) return match;
-    return `<ul>${match.trim()}</ul>`;
+  if (inList) { // Close any open list at the end
+    processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+  }
 
-  });
+  html = processedLines.join('\n');
   
-  // Paragraphs (simple: replace double newlines with <p> tags)
-  // This needs to be careful not to wrap existing blocks like <ul>, <ol>, <pre>
-  // A more robust solution would parse into blocks first.
-  // For now, let's just convert remaining newlines to <br> if they are not part of other structures.
-  // The .prose class usually handles paragraph spacing.
-  // Let's convert newlines that are not inside pre/code or after li/p
-  html = html.split('\n').map(line => {
-    const trimmedLine = line.trim();
-    if (trimmedLine.startsWith('<') && (trimmedLine.endsWith('>') || trimmedLine.includes('</'))) {
-      // Likely already HTML, don't wrap in <p>
-      return line;
-    }
-    if (trimmedLine === '') return ''; // Keep empty lines as they might be for spacing between markdown blocks
-    return `<p>${line}</p>`;
-  }).join('');
-
-  // Clean up: remove <p> tags around block elements like <pre>, <ul>, <ol>
-  html = html.replace(/<p>\s*(<(?:pre|ul|ol|h[1-6]|blockquote|hr)[^>]*>[\s\S]*?<\/(?:pre|ul|ol|h[1-6]|blockquote|hr)>)\s*<\/p>/gi, '$1');
+  // Clean up: remove <p> tags around block elements like <pre>, <ul>, <ol>, <blockquote>
+  html = html.replace(/<p>\s*(<(?:pre|ul|ol|blockquote|h[1-6]|hr)[^>]*>[\s\S]*?<\/(?:pre|ul|ol|blockquote|h[1-6]|hr)>)\s*<\/p>/gi, '$1');
   // Clean up empty paragraphs
   html = html.replace(/<p>\s*<\/p>/g, '');
+  // Consolidate multiple newlines from processing into single ones where appropriate (visual spacing is usually CSS controlled)
+  html = html.replace(/\n\n+/g, '\n');
 
 
   return <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: html }} />;

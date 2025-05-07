@@ -7,37 +7,19 @@ import { CodePanel } from '@/components/codeleap/code-panel';
 import { ExercisePanel } from '@/components/codeleap/exercise-panel';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
 import { generateExerciseAction, improveCodeAction, explainConceptAction, generateLearningPlanAction } from '../actions';
-import type { LearningStep, GenerateLearningPlanOutput } from '@/ai/flows/generate-learning-plan';
-import type { GenerateExerciseInput } from '@/ai/flows/generate-exercise';
-import { RefreshCcw, Zap, BookHeart, Loader2 } from 'lucide-react';
+import type { GenerateLearningPlanOutput } from '@/ai/flows/generate-learning-plan';
+import type { GenerateExerciseInput, GenerateExerciseOutput } from '@/ai/flows/generate-exercise';
+import { RefreshCcw, Zap, BookHeart, Loader2, Link2 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/codeleap/loading-spinner';
-
-export interface Exercise {
-  question: string;
-  codeSnippet?: string; // Optional for challenge mode
-  solution: string;
-  topic: string;
-  documentation: string;
-  exampleCode: string;
-}
-
-export interface Feedback {
-  message?: string;
-  suggestions?: string;
-  isCorrect?: boolean;
-}
-
-export interface Explanation {
-  explanation: string;
-  breakdown: string;
-  application: string;
-}
+import type { Explanation, Feedback, Exercise} from '@/components/codeleap/types';
+import { cn } from '@/lib/utils'; // Added import
 
 type LearningMode = 'hand-holding' | 'challenge';
 type ExpandedPanel = 'exercise' | 'code' | null;
@@ -58,6 +40,8 @@ print(f"The sum of {x} and {y} is {sum_result}")
 
 export function CodeLeapPageClient() {
   const [learningContent, setLearningContent] = useState('');
+  const [documentationUrl, setDocumentationUrl] = useState('');
+  const [codeUrl, setCodeUrl] = useState('');
   const [learningPlan, setLearningPlan] = useState<GenerateLearningPlanOutput | null>(null);
   const [currentPlanStepIndex, setCurrentPlanStepIndex] = useState<number | null>(null);
 
@@ -95,7 +79,7 @@ export function CodeLeapPageClient() {
         exampleCode: step.extractedExampleCode || DEFAULT_EXAMPLE_CODE,
         learningMode: mode,
       };
-      const aiExercise = await generateExerciseAction(exerciseInput);
+      const aiExercise: GenerateExerciseOutput = await generateExerciseAction(exerciseInput);
       setCurrentExercise({
         ...aiExercise,
         topic: step.topic,
@@ -116,8 +100,8 @@ export function CodeLeapPageClient() {
   }, [toast]);
 
   const handleGenerateLearningPlan = async () => {
-    if (!learningContent.trim()) {
-      toast({ title: 'Empty Content', description: 'Please paste some content to generate a plan.', variant: 'destructive' });
+    if (!learningContent.trim() && !documentationUrl.trim() && !codeUrl.trim()) {
+      toast({ title: 'Empty Content', description: 'Please paste content or provide at least one URL to generate a plan.', variant: 'destructive' });
       return;
     }
     setIsLoadingLearningPlan(true);
@@ -129,19 +113,24 @@ export function CodeLeapPageClient() {
     setUserCode('');
 
     try {
-      const plan = await generateLearningPlanAction({ content: learningContent });
+      const plan = await generateLearningPlanAction({ 
+        content: learningContent,
+        documentationUrl: documentationUrl.trim() || undefined,
+        codeUrl: codeUrl.trim() || undefined,
+      });
       setLearningPlan(plan);
       if (plan.learningSteps.length > 0) {
         fetchExerciseForStep(0, plan, learningMode);
       } else {
-        toast({ title: 'Empty Plan', description: 'The AI could not generate learning steps from the content.', variant: 'destructive'});
+        toast({ title: 'Empty Plan', description: 'The AI could not generate learning steps from the provided input. Ensure URLs are accessible and return text content.', variant: 'destructive'});
       }
     } catch (error) {
       toast({
         title: 'Error Generating Learning Plan',
-        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        description: error instanceof Error ? error.message : 'An unknown error occurred while generating the plan. Check console for details or ensure URLs are valid and public.',
         variant: 'destructive',
       });
+       console.error("Learning plan generation error:", error);
     } finally {
       setIsLoadingLearningPlan(false);
     }
@@ -167,7 +156,7 @@ export function CodeLeapPageClient() {
       setUserCode(aiExercise.codeSnippet || (learningMode === 'challenge' ? `# Start coding for: ${DEFAULT_TOPIC}\n` : ""));
     } catch (error) {
       toast({
-        title: 'Error Generating Exercise',
+        title: 'Error Generating Default Exercise',
         description: error instanceof Error ? error.message : 'An unknown error occurred.',
         variant: 'destructive',
       });
@@ -185,11 +174,11 @@ export function CodeLeapPageClient() {
   useEffect(() => {
     if (learningPlan && currentPlanStepIndex !== null) {
       fetchExerciseForStep(currentPlanStepIndex, learningPlan, learningMode);
-    } else if (!learningPlan) {
+    } else if (!learningPlan) { // Only fetch default if no plan and no current step (i.e. initial load or plan cleared)
         fetchDefaultExercise();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [learningMode]);
+  }, [learningMode]); // Removed learningPlan and currentPlanStepIndex to avoid loop with fetchExerciseForStep
 
   const handleRunCode = (code: string) => {
     console.log('Code submitted for simulation:', code);
@@ -252,7 +241,7 @@ export function CodeLeapPageClient() {
       toast({
         title: isCorrect ? 'Submission Correct!' : 'Submission Feedback',
         description: 'Check the feedback panel.',
-        variant: isCorrect ? 'default' : 'default',
+        variant: isCorrect ? 'default' : 'default', 
       });
     } catch (error) {
       toast({
@@ -326,10 +315,32 @@ export function CodeLeapPageClient() {
               placeholder="Paste your lecture notes, documentation, or any text content here..."
               value={learningContent}
               onChange={(e) => setLearningContent(e.target.value)}
-              rows={6}
+              rows={4}
               className="bg-background border-border focus:ring-accent"
             />
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="relative">
+                    <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        type="url"
+                        placeholder="Or paste a documentation URL (e.g., https://...)"
+                        value={documentationUrl}
+                        onChange={(e) => setDocumentationUrl(e.target.value)}
+                        className="bg-background border-border focus:ring-accent pl-10"
+                    />
+                </div>
+                <div className="relative">
+                    <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        type="url"
+                        placeholder="Or paste a code URL (e.g., raw GitHub link)"
+                        value={codeUrl}
+                        onChange={(e) => setCodeUrl(e.target.value)}
+                        className="bg-background border-border focus:ring-accent pl-10"
+                    />
+                </div>
+            </div>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-2">
                 <RadioGroup value={learningMode} onValueChange={(value: LearningMode) => setLearningMode(value)} className="flex gap-4 items-center">
                     <div className="flex items-center space-x-2">
                         <RadioGroupItem value="hand-holding" id="r1" />
@@ -340,7 +351,11 @@ export function CodeLeapPageClient() {
                         <Label htmlFor="r2" className="flex items-center gap-1"><Zap className="h-4 w-4 text-orange-500"/> Challenge Mode</Label>
                     </div>
                 </RadioGroup>
-                <Button onClick={handleGenerateLearningPlan} disabled={isLoadingLearningPlan || !learningContent.trim()} className="bg-accent text-accent-foreground hover:bg-accent/90 w-full sm:w-auto">
+                <Button 
+                    onClick={handleGenerateLearningPlan} 
+                    disabled={isLoadingLearningPlan || (!learningContent.trim() && !documentationUrl.trim() && !codeUrl.trim())} 
+                    className="bg-accent text-accent-foreground hover:bg-accent/90 w-full sm:w-auto"
+                >
                 {isLoadingLearningPlan ? <LoadingSpinner size={16} className="mr-2" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
                 Generate Learning Plan
                 </Button>
@@ -355,13 +370,19 @@ export function CodeLeapPageClient() {
                {currentLearningStep && <p className="text-sm text-muted-foreground">Current Step: {currentPlanStepIndex! + 1} of {learningPlan.learningSteps.length} - {currentLearningStep.topic}</p>}
             </CardHeader>
             <CardContent>
-              <Accordion type="single" collapsible className="w-full" value={currentPlanStepIndex !== null ? `item-${currentPlanStepIndex}` : undefined}>
+              <Accordion type="single" collapsible className="w-full" value={currentPlanStepIndex !== null ? `item-${currentPlanStepIndex}` : undefined} 
+                onValueChange={(value) => {
+                  const newIndex = parseInt(value.split('-')[1]);
+                  if (currentPlanStepIndex !== newIndex && learningPlan) { 
+                    fetchExerciseForStep(newIndex, learningPlan, learningMode);
+                  }
+                }}
+              >
                 {learningPlan.learningSteps.map((step, index) => (
                   <AccordionItem value={`item-${index}`} key={index}>
                     <AccordionTrigger
-                        onClick={() => fetchExerciseForStep(index, learningPlan, learningMode)}
                         disabled={isLoadingExercise && currentPlanStepIndex === index}
-                        className={currentPlanStepIndex === index ? "text-accent" : ""}
+                        className={cn("hover:no-underline", currentPlanStepIndex === index ? "text-accent font-semibold" : "")}
                     >
                         Step {index + 1}: {step.topic}
                         {isLoadingExercise && currentPlanStepIndex === index && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
@@ -392,34 +413,37 @@ export function CodeLeapPageClient() {
           </Card>
         )}
 
-        <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0">
-          {expandedPanel === 'code' && currentExercise ? null : (
+        <div className={cn("flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0", 
+          {"md:grid-cols-1" : expandedPanel !== null}
+        )}>
+          {(expandedPanel === null || expandedPanel === 'exercise') && (
             <ExercisePanel
               exercise={currentExercise}
               explanation={explanation}
               feedback={feedback}
-              isLoadingExercise={isLoadingExercise && !learningPlan}
+              isLoadingExercise={isLoadingExercise && (!learningPlan || currentPlanStepIndex === null)} 
               isLoadingExplanation={isLoadingExplanation}
               isLoadingFeedback={isLoadingImprove || isLoadingSubmit}
               onExplainConcept={handleExplainConcept}
               learningMode={learningMode}
               isExpanded={expandedPanel === 'exercise'}
               onToggleExpand={() => handleTogglePanelExpand('exercise')}
-              className={expandedPanel === 'exercise' ? "md:col-span-2" : ""}
+              className={cn(expandedPanel === 'exercise' ? "md:col-span-1" : "", {"hidden": expandedPanel === 'code'})}
             />
           )}
-          {expandedPanel === 'exercise' && currentExercise ? null : (
+          {(expandedPanel === null || expandedPanel === 'code') && (
             <CodePanel
+              key={currentExercise?.topic || 'default-editor'} 
               initialCode={currentExercise?.codeSnippet || userCode || (learningMode === 'challenge' && currentExercise ? `# Start coding for: ${currentExercise.topic}\n` : "print('Hello, CodeLeap!')" )}
               onRunCode={handleRunCode}
               onImproveCode={handleImproveCode}
               onSubmitCode={handleSubmitCode}
               isLoadingImprove={isLoadingImprove}
               isLoadingSubmit={isLoadingSubmit}
-              showCodeEditor={true}
+              showCodeEditor={true} 
               isExpanded={expandedPanel === 'code'}
               onToggleExpand={() => handleTogglePanelExpand('code')}
-              className={expandedPanel === 'code' ? "md:col-span-2" : ""}
+              className={cn(expandedPanel === 'code' ? "md:col-span-1" : "", {"hidden": expandedPanel === 'exercise'})}
             />
           )}
         </div>
