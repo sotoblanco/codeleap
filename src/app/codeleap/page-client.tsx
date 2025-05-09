@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { AppHeader } from '@/components/codeleap/app-header';
 import { CodePanel } from '@/components/codeleap/code-panel';
 import { ExercisePanel } from '@/components/codeleap/exercise-panel';
+import { FeedbackPanel } from '@/components/codeleap/feedback-panel';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -457,6 +458,16 @@ export function CodeLeapPageClient() {
                 <Button onClick={handlePrevStep} disabled={isLoadingExercise || currentPlanStepIndex === null || currentPlanStepIndex === 0} variant="outline">Previous Step</Button>
                 <Button onClick={handleNextStep} disabled={isLoadingExercise || currentPlanStepIndex === null || currentPlanStepIndex === learningPlan.learningSteps.length - 1} variant="outline">Next Step</Button>
               </div>
+              
+              {/* Add feedback panel */}
+              {learningPlan && (
+                <div className="mt-6">
+                  <FeedbackPanel 
+                    planId={learningPlan.title} 
+                    stepId={currentPlanStepIndex !== null ? currentPlanStepIndex : undefined} 
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
